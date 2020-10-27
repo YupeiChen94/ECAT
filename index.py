@@ -8,7 +8,7 @@ import pandas as pd
 from datetime import date
 import time
 
-from app import app
+from app import app, cache, session_id
 
 # region SQL Setup
 server = 'DESKTOP-G4MFTGK'
@@ -113,13 +113,6 @@ def control_tabs():
 # endregion
 
 
-# Multiple Units, Single SampleType, DateRange
-# query_table = 'ALB.dbo.DrySamples'
-# query_units = (540, 76)
-# query_sample_type = 'ECAT'
-# params = [query_sample_type]
-# params += query_units
-
 app.layout = html.Div(
     id='app-container', children=[
         # Banner
@@ -139,17 +132,16 @@ app.layout = html.Div(
         html.Div(
             dcc.Markdown(id='debug'),
             # INSERT GRAPH HERE
-        )
-
+        ),
         # DF Storage
-        # dcc.Store(id='DFT-P', storage_type='memory'),
+        dcc.Store(id='query-results', storage_type='memory'),
     ])
 
 
 @app.callback(
     [
         Output('alert-msg', 'children'),
-        Output('debug', 'children')
+        Output('query-results', 'data')
     ],
     [Input('query-button', 'n_clicks')],
     [
@@ -166,27 +158,32 @@ def query(n_clicks, sample_type, sdate, edate, refinery):
     t0 = time.time()
     refinery_list = q_units[q_units.Refinery.isin(refinery)]
     refinery_list = refinery_list['REFINERY_ID'].tolist()
+    wet = True if sample_type in ['WGS', 'SLURRY FINES 1', 'FEED'] else False
     params = [sample_type, sdate, edate]
     params += refinery_list
 
-    # TODO: Modify table selection based on sample type
-    # WGS, SLURRY FINES 1, FEED are LiquidSamples
     # TODO: Add an option for 'all' refinery units
 
-    q_string = """Select Sample_Number, Refinery_ID, Sample_Type, Sample_Date
+    # Sample_Number, Refinery_ID, Sample_Type, Sample_Date
+    q_string = """Select *
                         FROM dbo.DrySamples
                         WHERE Sample_Type = {0} 
                         AND Sample_Date BETWEEN {0} and {0}
                         AND Refinery_ID IN ({1})"""
+    if wet:
+        q_string = q_string.replace('dbo.DrySamples', 'dbo.LiquidSamples')
     q_string = q_string.format('?', ','.join('?' * len(refinery_list)))
     df = pd.read_sql_query(q_string, cnxn, params=params)
+
+    cache.set(session_id, df)
+    # print(cache.get(session_id))
 
     t1 = time.time()
     exec_time = t1-t0
     query_size = df.shape[0]
     alert_msg = f"Queried {query_size} records. Total time: {exec_time:.2f}s."
     alert = dbc.Alert(alert_msg, color='success', dismissable=True)
-    return alert, 'None'
+    return alert, df.to_dict('records')
 
 # @app.callback(Output('page-content', 'children'),
 #               [Input('url', 'pathname')])
