@@ -116,11 +116,18 @@ def control_tabs():
                         html.Div(
                             id='graph-card', children=[
                                 html.Br(),
+                                html.P('Graph Type'),
+                                dcc.Dropdown(
+                                    id='graph-type',
+                                    options=[{'label': i, 'value': i} for i in ['Scatter', 'Scatter_3D']],
+                                    searchable=False,
+                                    disabled=False
+                                ),
+                                html.Br(),
                                 html.P('X-Axis'),
                                 dcc.Dropdown(
                                     id='x-col',
-                                    options=[{'label': i, 'value': i} for i in ['xcollist']],
-                                    # value='xcollist',
+                                    options=[{'label': i, 'value': i} for i in ['x']],
                                     searchable=True,
                                     disabled=False
                                 ),
@@ -128,8 +135,7 @@ def control_tabs():
                                 html.P('Y-Axis'),
                                 dcc.Dropdown(
                                     id='y-col',
-                                    options=[{'label': i, 'value': i} for i in ['ycollist']],
-                                    # value='ycollist',
+                                    options=[{'label': i, 'value': i} for i in ['y']],
                                     searchable=True,
                                     disabled=False
                                 ),
@@ -137,8 +143,7 @@ def control_tabs():
                                 html.P('Z-Axis'),
                                 dcc.Dropdown(
                                     id='z-col',
-                                    options=[{'label': i, 'value': i} for i in ['zcollist']],
-                                    # value='zcollist',
+                                    options=[{'label': i, 'value': i} for i in ['z']],
                                     searchable=True,
                                     disabled=False
                                 ),
@@ -275,21 +280,16 @@ def update_axis_selector(col_list, x, y, z):
 
 
 @app.callback(
-    [
-        Output('custom-graph', 'figure'),
-        Output('debug', 'children')
-    ],
-    [
-        Input('render-button', 'n_clicks')
-    ],
+    Output('custom-graph', 'figure'),
+    [Input('render-button', 'n_clicks')],
     [
         State('x-col', 'value'),
         State('y-col', 'value'),
         State('z-col', 'value'),
-        # TODO: Add button for 2d/3d
+        State('graph-type', 'value')
     ]
 )
-def render_graph(n_clicks, x, y, z):
+def render_graph(n_clicks, x, y, z, graph_type):
     if n_clicks < 1:
         raise PreventUpdate
     df = cache.get(session_id)
@@ -298,9 +298,11 @@ def render_graph(n_clicks, x, y, z):
         raise PreventUpdate
     else:
         # TODO: Trendline option?
-        # fig = px.scatter(df, x=x, y=y, color='Refinery_Name')
-        fig = px.scatter_3d(df, x=x, y=y, z=z, color='Refinery_Name')
-        return fig, ['']
+        if graph_type == 'Scatter':
+            fig = px.scatter(df, x=x, y=y, color='Refinery_Name')
+        elif graph_type == 'Scatter_3D':
+            fig = px.scatter_3d(df, x=x, y=y, z=z, color='Refinery_Name')
+        return fig
 
 
 if __name__ == '__main__':
