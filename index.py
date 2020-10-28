@@ -56,7 +56,7 @@ def control_tabs():
                         html.P('ECAT Reporting Tool is a visualizer that allows you to explore ECAT data '
                                'in multiple representations.'),
                         html.P('You can query by sample type, refinery, and date ranges '),
-                        html.P('Version 0.2 - 10/26/20'),
+                        html.P('Version 0.3 - 10/28/20'),
                         dcc.Markdown("""Author: [Yupei Chen](mailto:Yupei.Chen@Albemarle.com)""")
                     ])
                 ),
@@ -66,6 +66,7 @@ def control_tabs():
                     children=html.Div(className='control-tab', children=[
                         html.Div(
                             id='query-card', children=[
+                                html.Br(),
                                 html.P('Select Sample Type'),
                                 dcc.Dropdown(
                                     id='sample-type-select',
@@ -114,6 +115,7 @@ def control_tabs():
                     children=html.Div(className='control-tab', children=[
                         html.Div(
                             id='graph-card', children=[
+                                html.Br(),
                                 html.P('X-Axis'),
                                 dcc.Dropdown(
                                     id='x-col',
@@ -160,9 +162,9 @@ def custom_graph():
         className='graph-div',
         children=[
             dcc.Graph(
-                id='custom-graph-2d',
+                id='custom-graph',
                 figure={},
-                style={'height': '500px'}
+                style={'height': '800px'}
             )
         ]
     )
@@ -274,14 +276,20 @@ def update_axis_selector(col_list, x, y, z):
 
 @app.callback(
     [
-        Output('custom-graph-2d', 'figure'),
+        Output('custom-graph', 'figure'),
         Output('debug', 'children')
     ],
     [
         Input('render-button', 'n_clicks')
+    ],
+    [
+        State('x-col', 'value'),
+        State('y-col', 'value'),
+        State('z-col', 'value'),
+        # TODO: Add button for 2d/3d
     ]
 )
-def render_graph(n_clicks):
+def render_graph(n_clicks, x, y, z):
     if n_clicks < 1:
         raise PreventUpdate
     df = cache.get(session_id)
@@ -290,9 +298,9 @@ def render_graph(n_clicks):
         raise PreventUpdate
     else:
         # TODO: Trendline option?
-        fig = px.scatter(df, x='MPSD', y='Sb_PPM', color='Refinery_Name')
+        # fig = px.scatter(df, x=x, y=y, color='Refinery_Name')
+        fig = px.scatter_3d(df, x=x, y=y, z=z, color='Refinery_Name')
         return fig, ['']
-    # return ['']
 
 
 if __name__ == '__main__':
