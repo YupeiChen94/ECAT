@@ -118,7 +118,7 @@ def control_tabs():
                                 dcc.Dropdown(
                                     id='x-col',
                                     options=[{'label': i, 'value': i} for i in ['xcollist']],
-                                    value='xcollist',
+                                    # value='xcollist',
                                     searchable=True,
                                     disabled=False
                                 ),
@@ -127,7 +127,7 @@ def control_tabs():
                                 dcc.Dropdown(
                                     id='y-col',
                                     options=[{'label': i, 'value': i} for i in ['ycollist']],
-                                    value='ycollist',
+                                    # value='ycollist',
                                     searchable=True,
                                     disabled=False
                                 ),
@@ -136,7 +136,7 @@ def control_tabs():
                                 dcc.Dropdown(
                                     id='z-col',
                                     options=[{'label': i, 'value': i} for i in ['zcollist']],
-                                    value='zcollist',
+                                    # value='zcollist',
                                     searchable=True,
                                     disabled=False
                                 ),
@@ -202,7 +202,6 @@ app.layout = html.Div(
     [
         Output('alert-msg', 'children'),
         Output('columns-memory', 'data')
-        # TODO: Update axis selectors on button click, do I even need to store list of columns in memory?
     ],
     [Input('query-button', 'n_clicks')],
     [
@@ -236,7 +235,6 @@ def query(n_clicks, sample_type, sdate, edate, refinery):
     df = pd.read_sql_query(q_string, cnxn, params=params)
     df.dropna(axis='columns', how='all', inplace=True)
 
-    # TODO: Remove non-data columns from list of columns
     columns = df.columns.tolist()
     col_to_remove = ['Sample_Number', 'Sample_Date', 'Arrival_Date', 'Refinery_ID', 'Sampling_Point', 'Sample_Type', 'Comment', 'ECAT_Original_ID']
     col_to_remove += ['SF_Account_ID', 'Current_Catalyst', 'Current_Supplier', 'Refinery_Name', 'Sample_Year']
@@ -250,6 +248,28 @@ def query(n_clicks, sample_type, sdate, edate, refinery):
     alert_msg = f"Queried {query_size} records. Total time: {exec_time:.2f}s."
     alert = dbc.Alert(alert_msg, color='success', dismissable=True, duration=2000)
     return alert, columns
+
+
+@app.callback(
+    [
+        Output('x-col', 'options'),
+        Output('y-col', 'options'),
+        Output('z-col', 'options'),
+    ],
+    [
+        Input('columns-memory', 'data'),
+        Input('x-col', 'value'),
+        Input('y-col', 'value'),
+        Input('z-col', 'value')
+    ]
+)
+def update_axis_selector(col_list, x, y, z):
+    if col_list is None:
+        raise PreventUpdate
+    x_col = [{'label': i, 'value': i, 'disabled': i in [y, z]} for i in col_list]
+    y_col = [{'label': i, 'value': i, 'disabled': i in [x, z]} for i in col_list]
+    z_col = [{'label': i, 'value': i, 'disabled': i in [x, y]} for i in col_list]
+    return x_col, y_col, z_col
 
 
 @app.callback(
