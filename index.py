@@ -3,6 +3,7 @@ import dash_core_components as dcc
 import dash_html_components as html
 from dash.dependencies import Input, Output, State, ClientsideFunction
 from dash.exceptions import PreventUpdate
+import plotly.express as px
 import pyodbc
 import pandas as pd
 from datetime import date
@@ -40,7 +41,7 @@ q_sample_types = pd.read_sql(q_sample_types_string, cnxn)['Sample_Type'].values.
 # region Layout Objects
 def control_tabs():
     """
-    :return: A Div containing Intro and Graphing Option tabs
+    :return: A Div containing Intro, Query and Graphing Option tabs
     """
     return html.Div(
         id='ecat-control-tabs',
@@ -64,7 +65,7 @@ def control_tabs():
                     value='query',
                     children=html.Div(className='control-tab', children=[
                         html.Div(
-                            id='control-card', children=[
+                            id='query-card', children=[
                                 html.P('Select Sample Type'),
                                 dcc.Dropdown(
                                     id='sample-type-select',
@@ -106,8 +107,63 @@ def control_tabs():
                             ]
                         )
                     ])
+                ),
+                dcc.Tab(
+                    label='Graph Options',
+                    value='graph-options',
+                    children=html.Div(className='control-tab', children=[
+                        html.Div(
+                            id='graph-card', children=[
+                                html.P('X-Axis'),
+                                dcc.Dropdown(
+                                    id='x-col',
+                                    options=[{'label': i, 'value': i} for i in ['xcollist']],
+                                    value='xcollist',
+                                    searchable=True,
+                                    disabled=False
+                                ),
+                                html.Br(),
+                                html.P('Y-Axis'),
+                                dcc.Dropdown(
+                                    id='y-col',
+                                    options=[{'label': i, 'value': i} for i in ['ycollist']],
+                                    value='ycollist',
+                                    searchable=True,
+                                    disabled=False
+                                ),
+                                html.Br(),
+                                html.P('Z-Axis'),
+                                dcc.Dropdown(
+                                    id='z-col',
+                                    options=[{'label': i, 'value': i} for i in ['zcollist']],
+                                    value='zcollist',
+                                    searchable=True,
+                                    disabled=False
+                                ),
+                                html.Br(),
+                                dbc.Button('Render Graphs', color='primary', id='render-button', n_clicks=0)
+                            ]
+                        )
+                    ])
                 )
             ])
+        ]
+    )
+
+
+def custom_graph():
+    """
+    :return: A Div containing the placeholder for a 2D or 3D graph visualization
+    """
+    return html.Div(
+        id='custom-graph-div',
+        className='graph-div',
+        children=[
+            dcc.Graph(
+                id='custom-graph-2d',
+                figure={},
+                style={'height': '500px'}
+            )
         ]
     )
 # endregion
@@ -130,18 +186,23 @@ app.layout = html.Div(
         ),
         # Right Column
         html.Div(
-            dcc.Markdown(id='debug'),
-            # INSERT GRAPH HERE
+            id='right-colulmn',
+            className='eight columns',
+            children=[
+                dcc.Markdown(id='debug'),
+                custom_graph(),
+            ]
         ),
-        # DF Storage
-        dcc.Store(id='query-results', storage_type='memory'),
+        # Column Storage
+        dcc.Store(id='columns-memory', storage_type='memory'),
     ])
 
 
 @app.callback(
     [
         Output('alert-msg', 'children'),
-        Output('query-results', 'data')
+        Output('columns-memory', 'data')
+        # TODO: Update axis selectors on button click, do I even need to store list of columns in memory?
     ],
     [Input('query-button', 'n_clicks')],
     [
@@ -152,7 +213,7 @@ app.layout = html.Div(
     ]
 )
 def query(n_clicks, sample_type, sdate, edate, refinery):
-    # TODO: Try block to validate query returns data
+    # TODO: Try block to validate query returns data, return error as alert
     if n_clicks < 1:
         raise PreventUpdate
     t0 = time.time()
@@ -164,7 +225,6 @@ def query(n_clicks, sample_type, sdate, edate, refinery):
 
     # TODO: Add an option for 'all' refinery units
 
-    # Sample_Number, Refinery_ID, Sample_Type, Sample_Date
     q_string = """Select *
                         FROM dbo.DrySamples
                         WHERE Sample_Type = {0} 
@@ -174,57 +234,46 @@ def query(n_clicks, sample_type, sdate, edate, refinery):
         q_string = q_string.replace('dbo.DrySamples', 'dbo.LiquidSamples')
     q_string = q_string.format('?', ','.join('?' * len(refinery_list)))
     df = pd.read_sql_query(q_string, cnxn, params=params)
+    df.dropna(axis='columns', how='all', inplace=True)
+
+    # TODO: Remove non-data columns from list of columns
+    columns = df.columns.tolist()
+    col_to_remove = ['Sample_Number', 'Sample_Date', 'Arrival_Date', 'Refinery_ID', 'Sampling_Point', 'Sample_Type', 'Comment', 'ECAT_Original_ID']
+    col_to_remove += ['SF_Account_ID', 'Current_Catalyst', 'Current_Supplier', 'Refinery_Name', 'Sample_Year']
+    columns = [i for i in columns if i not in col_to_remove]
 
     cache.set(session_id, df)
-    # print(cache.get(session_id))
 
     t1 = time.time()
     exec_time = t1-t0
     query_size = df.shape[0]
     alert_msg = f"Queried {query_size} records. Total time: {exec_time:.2f}s."
-    alert = dbc.Alert(alert_msg, color='success', dismissable=True)
-    return alert, df.to_dict('records')
+    alert = dbc.Alert(alert_msg, color='success', dismissable=True, duration=2000)
+    return alert, columns
 
-# @app.callback(Output('page-content', 'children'),
-#               [Input('url', 'pathname')])
-# def display_page(pathname):
-#     if pathname == '/page/Information':
-#         return Info.layout
-#     elif pathname == '/page/Query':
-#         return Query.layout
-#     elif pathname == '/page/Options':
-#         return Options.layout
-#     elif pathname == '/page/Graphs':
-#         return Graphs.layout
-#     else:
-#         return Info.layout
+
+@app.callback(
+    [
+        Output('custom-graph-2d', 'figure'),
+        Output('debug', 'children')
+    ],
+    [
+        Input('render-button', 'n_clicks')
+    ]
+)
+def render_graph(n_clicks):
+    if n_clicks < 1:
+        raise PreventUpdate
+    df = cache.get(session_id)
+    if df is None:
+        # TODO: Alert to user that there is no data to render
+        raise PreventUpdate
+    else:
+        # TODO: Trendline option?
+        fig = px.scatter(df, x='MPSD', y='Sb_PPM', color='Refinery_Name')
+        return fig, ['']
+    # return ['']
 
 
 if __name__ == '__main__':
     app.run_server(debug=True)
-
-    # Alternate Multi-page example
-    # server.py
-    # from flask import Flask
-    #
-    # server = Flask(__name__)
-    #
-    # app1.py
-    # import dash
-    # from server import server
-    #
-    # app = dash.Dash(name='app1', sharing=True, server=server, url_base_pathname='/app1')
-    #
-    # app2.py
-    # import dash
-    # from server import server
-    #
-    # app = dash.Dash(name='app2', sharing=True, server=server, url_base_pathname='/app2')
-    #
-    # run.py
-    # from server import server
-    # from app1 import app as app1
-    # from app2 import app as app2
-    #
-    # if __name__ == '__main__':
-    #     server.run()
