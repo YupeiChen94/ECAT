@@ -7,33 +7,37 @@ import plotly.express as px
 import pyodbc
 import pandas as pd
 from datetime import date
+from socket import gethostname
 import time
 
-from app import app, cache, session_id
+from app import app, server, cache, session_id
+
+isHome = True if gethostname() == 'DESKTOP-G4MFTGK' else False
 
 # region SQL Setup
-server = 'DESKTOP-G4MFTGK'
-database = 'ALB'
-trusted_cnxn = 'yes'
-cnxn = pyodbc.connect('DRIVER={SQL Server};'
-                      'SERVER='+server+';'
-                      'DATABASE='+database+';'
-                      'TRUSTED_CONNECTION='+trusted_cnxn+';')
+sql_server = 'DESKTOP-G4MFTGK' if isHome else 'CDCSQLPROD01'
+database = 'eCat'
+trusted_cnxn = 'Yes'
+cnxn = pyodbc.connect('TRUSTED_CONNECTION=' + trusted_cnxn + ';'
+                      'DRIVER={SQL Server Native Client 11.0};'
+                      'SERVER=' + sql_server + ';'
+                      'DATABASE=' + database + ';'
+                      )
 
 q_units_string = """
                         SELECT DISTINCT Sub.REFINERY_ID, Sub.REFINERY_NAME
-                        FROM (SELECT DISTINCT REFINERY_ID, REFINERY_NAME FROM ALB.dbo.DrySamples
+                        FROM (SELECT DISTINCT REFINERY_ID, REFINERY_NAME FROM eCat.dbo.Dry_Samples_vw
                         UNION ALL
-                        SELECT DISTINCT REFINERY_ID, REFINERY_NAME FROM ALB.dbo.LiquidSamples) AS Sub
+                        SELECT DISTINCT REFINERY_ID, REFINERY_NAME FROM eCat.dbo.Liquid_Samples_vw) AS Sub
                         ORDER BY Sub.REFINERY_ID"""
 q_units = pd.read_sql_query(q_units_string, cnxn)
 q_units['Refinery'] = q_units['REFINERY_NAME'] + ' (' + q_units['REFINERY_ID'].astype(str) + ')'
 q_units_list = q_units['Refinery'].values.tolist()
 q_sample_types_string = """
                         SELECT DISTINCT Sub.Sample_Type
-                        FROM (SELECT DISTINCT Sample_Type FROM ALB.dbo.DrySamples
+                        FROM (SELECT DISTINCT Sample_Type FROM eCat.dbo.Dry_Samples_vw
                         UNION ALL
-                        SELECT DISTINCT Sample_Type FROM ALB.dbo.LiquidSamples) AS Sub"""
+                        SELECT DISTINCT Sample_Type FROM eCat.dbo.Liquid_Samples_vw) AS Sub"""
 q_sample_types = pd.read_sql(q_sample_types_string, cnxn)['Sample_Type'].values.tolist()
 # endregion
 
@@ -232,18 +236,18 @@ def query(n_clicks, sample_type, sdate, edate, refinery):
     # TODO: Add an option for 'all' refinery units
 
     q_string = """Select *
-                        FROM dbo.DrySamples
+                        FROM dbo.Dry_Samples_vw
                         WHERE Sample_Type = {0} 
                         AND Sample_Date BETWEEN {0} and {0}
                         AND Refinery_ID IN ({1})"""
     if wet:
-        q_string = q_string.replace('dbo.DrySamples', 'dbo.LiquidSamples')
+        q_string = q_string.replace('dbo.Dry_Samples_vw', 'dbo.Liquid_Samples_vw')
     q_string = q_string.format('?', ','.join('?' * len(refinery_list)))
     df = pd.read_sql_query(q_string, cnxn, params=params)
     df.dropna(axis='columns', how='all', inplace=True)
 
     columns = df.columns.tolist()
-    col_to_remove = ['Sample_Number', 'Sample_Date', 'Arrival_Date', 'Refinery_ID', 'Sampling_Point', 'Sample_Type', 'Comment', 'ECAT_Original_ID']
+    col_to_remove = ['Sample_Number', 'Arrival_Date', 'Refinery_ID', 'Sampling_Point', 'Sample_Type', 'Comment', 'ECAT_Original_ID']
     col_to_remove += ['SF_Account_ID', 'Current_Catalyst', 'Current_Supplier', 'Refinery_Name', 'Sample_Year']
     columns = [i for i in columns if i not in col_to_remove]
 
