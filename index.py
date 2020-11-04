@@ -32,7 +32,7 @@ q_units_string = """
                         ORDER BY Sub.REFINERY_ID"""
 q_units = pd.read_sql_query(q_units_string, cnxn)
 q_units['Refinery'] = q_units['REFINERY_NAME'] + ' (' + q_units['REFINERY_ID'].astype(str) + ')'
-q_units_list = q_units['Refinery'].values.tolist()
+q_units_list = sorted(q_units['Refinery'].values.tolist())
 q_sample_types_string = """
                         SELECT DISTINCT Sub.Sample_Type
                         FROM (SELECT DISTINCT Sample_Type FROM eCat.dbo.Dry_Samples_vw
@@ -131,8 +131,14 @@ def control_tabs():
                                     options=[{'label': i, 'value': i} for i in graph_types],
                                     value=graph_types[0],
                                     searchable=False,
-                                    persisted_props=['value'],
-                                    persistence_type='local',
+                                ),
+                                html.Br(),
+                                html.P('Legend'),
+                                dcc.Dropdown(
+                                    id='legend-col',
+                                    options=[{'label': i, 'value': i} for i in ['Refinery_Name', 'Current_Catalyst']],
+                                    value='Refinery_Name',
+                                    searchable=False,
                                 ),
                                 html.Br(),
                                 html.P('X-Axis'),
@@ -294,10 +300,11 @@ def update_axis_selector(col_list, x, y, z):
         State('x-col', 'value'),
         State('y-col', 'value'),
         State('z-col', 'value'),
-        State('graph-type', 'value')
+        State('graph-type', 'value'),
+        State('legend-col', 'value')
     ]
 )
-def render_graph(n_clicks, x, y, z, graph_type):
+def render_graph(n_clicks, x, y, z, graph_type, legend):
     if n_clicks < 1:
         raise PreventUpdate
     df = cache.get(session_id)
@@ -307,9 +314,16 @@ def render_graph(n_clicks, x, y, z, graph_type):
     else:
         # TODO: Trendline option?
         if graph_type == 'Scatter':
-            fig = px.scatter(df, x=x, y=y, color='Refinery_Name')
+            fig = px.scatter(df, x=x, y=y, color=legend)
         elif graph_type == 'Scatter_3D':
-            fig = px.scatter_3d(df, x=x, y=y, z=z, color='Refinery_Name')
+            fig = px.scatter_3d(df, x=x, y=y, z=z, color=legend)
+        fig.update_layout(legend=dict(
+            orientation="h",
+            yanchor="top",
+            y=1.05,
+            xanchor="left",
+            x=0
+        ))
         return fig
 
 

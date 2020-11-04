@@ -16,9 +16,6 @@ app = dash.Dash(__name__, server=server, external_stylesheets=[dbc.themes.SPACEL
 cache = Cache(app.server, config=config)
 session_id = str(uuid.uuid4())
 
-# TODO: Option for user where they want the legend
-# TODO: Legend by catalyst or refinery unit
-# TODO: Order refinery units alphabetically by name
 # TODO: Download button for current cached data
 # TODO: AD Security
 # TODO: Remove create/update date from axis selector
