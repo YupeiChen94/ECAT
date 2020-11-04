@@ -42,6 +42,11 @@ q_sample_types = pd.read_sql(q_sample_types_string, cnxn)['Sample_Type'].values.
 # endregion
 
 
+# region Constants
+graph_types = ['Scatter', 'Scatter_3D']
+# endregion
+
+
 # region Layout Objects
 def control_tabs():
     """
@@ -123,33 +128,26 @@ def control_tabs():
                                 html.P('Graph Type'),
                                 dcc.Dropdown(
                                     id='graph-type',
-                                    options=[{'label': i, 'value': i} for i in ['Scatter', 'Scatter_3D']],
+                                    options=[{'label': i, 'value': i} for i in graph_types],
+                                    value=graph_types[0],
                                     searchable=False,
-                                    disabled=False
+                                    persisted_props=['value'],
+                                    persistence_type='local',
                                 ),
                                 html.Br(),
                                 html.P('X-Axis'),
                                 dcc.Dropdown(
                                     id='x-col',
-                                    options=[{'label': i, 'value': i} for i in ['x']],
-                                    searchable=True,
-                                    disabled=False
                                 ),
                                 html.Br(),
                                 html.P('Y-Axis'),
                                 dcc.Dropdown(
                                     id='y-col',
-                                    options=[{'label': i, 'value': i} for i in ['y']],
-                                    searchable=True,
-                                    disabled=False
                                 ),
                                 html.Br(),
                                 html.P('Z-Axis'),
                                 dcc.Dropdown(
                                     id='z-col',
-                                    options=[{'label': i, 'value': i} for i in ['z']],
-                                    searchable=True,
-                                    disabled=False
                                 ),
                                 html.Br(),
                                 dbc.Button('Render Graphs', color='primary', id='render-button', n_clicks=0)
@@ -173,14 +171,14 @@ def custom_graph():
             dcc.Graph(
                 id='custom-graph',
                 figure={},
-                style={'height': '800px'}
+                style={'height': '80vh'}
             )
         ]
     )
 # endregion
 
 
-app.layout = html.Div(
+app.layout = dbc.Container(
     id='app-container', children=[
         # Banner
         html.Div(
@@ -188,25 +186,31 @@ app.layout = html.Div(
             className='banner',
             children=[html.Img(src=app.get_asset_url('plotly_logo.png'))]
         ),
-        # Left Column
-        html.Div(
-            id='left-column',
-            className='four columns',
-            children=[control_tabs(), html.Br(), dbc.Spinner(html.Div(id='alert-msg'))]
-            + [html.Div(['initial child'], id='output-clientside', style={'display': 'none'})]
-        ),
-        # Right Column
-        html.Div(
-            id='right-colulmn',
-            className='eight columns',
-            children=[
-                dcc.Markdown(id='debug'),
-                custom_graph(),
-            ]
-        ),
-        # Column Storage
-        dcc.Store(id='columns-memory', storage_type='memory'),
-    ])
+        dbc.Row([
+            dbc.Col(
+                # Left Column
+                html.Div(
+                    id='left-column',
+                    children=[control_tabs(), html.Br(), dbc.Spinner(html.Div(id='alert-msg'))]
+                    + [html.Div(['initial child'], id='output-clientside', style={'display': 'none'})]
+                ),
+                width=3
+            ),
+            dbc.Col(
+                # Right Column
+                html.Div(
+                    id='right-colulmn',
+                    children=[
+                        dcc.Markdown(id='debug'),
+                        custom_graph(),
+                    ]
+                ), width=9
+            ),
+            # Column Storage
+            dcc.Store(id='columns-memory', storage_type='memory'),
+        ])
+    ]
+)
 
 
 @app.callback(
