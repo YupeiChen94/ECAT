@@ -1,8 +1,10 @@
 import dash_bootstrap_components as dbc
 import dash_core_components as dcc
 import dash_html_components as html
-from dash.dependencies import Input, Output, State, ClientsideFunction
+from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
+from dash_extensions import Download
+from dash_extensions.snippets import send_data_frame
 import plotly.express as px
 import pyodbc
 import pandas as pd
@@ -113,7 +115,9 @@ def control_tabs():
                                     persistence_type='local',
                                 ),
                                 html.Br(),
-                                dbc.Button('Query ECAT DB', color='primary', id='query-button', n_clicks=0)
+                                dbc.Button('Query ECAT DB', color='primary', id='query-button', n_clicks=0, className='mr-5'),
+                                dbc.Button('Download CSV', color='info', id='dl-button', n_clicks=0),
+                                Download(id='query-data-dl')
                             ]
                         )
                     ])
@@ -198,7 +202,6 @@ app.layout = dbc.Container(
                 html.Div(
                     id='left-column',
                     children=[control_tabs(), html.Br(), dbc.Spinner(html.Div(id='alert-msg'))]
-                    + [html.Div(['initial child'], id='output-clientside', style={'display': 'none'})]
                 ),
                 width=3
             ),
@@ -258,7 +261,7 @@ def query(n_clicks, sample_type, sdate, edate, refinery):
 
     columns = df.columns.tolist()
     col_to_remove = ['Sample_Number', 'Arrival_Date', 'Refinery_ID', 'Sampling_Point', 'Sample_Type', 'Comment', 'ECAT_Original_ID']
-    col_to_remove += ['SF_Account_ID', 'Current_Catalyst', 'Current_Supplier', 'Refinery_Name', 'Sample_Year']
+    col_to_remove += ['SF_Account_ID', 'Current_Catalyst', 'Current_Supplier', 'Refinery_Name', 'Sample_Year', 'Create_Date', 'Update_Date']
     columns = [i for i in columns if i not in col_to_remove]
 
     cache.set(session_id, df)
@@ -325,6 +328,20 @@ def render_graph(n_clicks, x, y, z, graph_type, legend):
             x=0
         ))
         return fig
+
+
+@app.callback(
+    Output('query-data-dl', 'data'),
+    [Input('dl-button', 'n_clicks')]
+)
+def generate_csv(n_clicks):
+    if n_clicks < 1:
+        raise PreventUpdate
+    df = cache.get(session_id)
+    if df is None:
+        raise PreventUpdate
+    else:
+        return send_data_frame(df.to_csv, filename='querydata.csv')
 
 
 if __name__ == '__main__':

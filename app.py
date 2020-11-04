@@ -16,8 +16,5 @@ app = dash.Dash(__name__, server=server, external_stylesheets=[dbc.themes.SPACEL
 cache = Cache(app.server, config=config)
 session_id = str(uuid.uuid4())
 
-# TODO: Download button for current cached data
 # TODO: AD Security
-# TODO: Remove create/update date from axis selector
-# TODO: Remove M000 PSD from axis selector
-# TODO: Benchmarking: All refinerys, user sample type and date, but highlighting a specific refinery
+# TODO: Benchmarking: All refinerys, user sample type and date, but highlighting a specific refinery. Benchmark Toggle Button
