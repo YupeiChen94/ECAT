@@ -116,7 +116,7 @@ def control_tabs():
                                 ),
                                 html.Br(),
                                 dbc.Button('Query ECAT DB', color='primary', id='query-button', n_clicks=0, className='mr-5'),
-                                dbc.Button('Download CSV', color='info', id='dl-button', n_clicks=0),
+                                dbc.Button('Download CSV', color='info', id='dl-button', n_clicks=0, style=dict(display='none')),
                                 Download(id='query-data-dl')
                             ]
                         )
@@ -225,7 +225,8 @@ app.layout = dbc.Container(
 @app.callback(
     [
         Output('alert-msg', 'children'),
-        Output('columns-memory', 'data')
+        Output('columns-memory', 'data'),
+        Output('dl-button', 'style'),
     ],
     [Input('query-button', 'n_clicks')],
     [
@@ -271,7 +272,7 @@ def query(n_clicks, sample_type, sdate, edate, refinery):
     query_size = df.shape[0]
     alert_msg = f"Queried {query_size} records. Total time: {exec_time:.2f}s."
     alert = dbc.Alert(alert_msg, color='success', dismissable=True, duration=2000)
-    return alert, columns
+    return alert, columns, dict()
 
 
 @app.callback(
