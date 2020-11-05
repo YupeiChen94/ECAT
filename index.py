@@ -201,7 +201,12 @@ app.layout = dbc.Container(
                 # Left Column
                 html.Div(
                     id='left-column',
-                    children=[control_tabs(), html.Br(), dbc.Spinner(html.Div(id='alert-msg'))]
+                    children=[
+                        control_tabs(),
+                        html.Br(),
+                        dbc.Spinner(html.Div(id='query-msg')),
+                        dbc.Spinner(html.Div(id='render-msg'))
+                    ]
                 ),
                 width=3
             ),
@@ -223,8 +228,20 @@ app.layout = dbc.Container(
 
 
 @app.callback(
+    Output('render-msg', 'children'),
+    [Input('render-button', 'n_clicks')]
+)
+def render_msg(n_clicks):
+    if n_clicks < 1:
+        raise PreventUpdate
+    alert_msg = f"Rendering your visualization..."
+    alert = dbc.Alert(alert_msg, color='warning', dismissable=True, duration=2000)
+    return alert
+
+
+@app.callback(
     [
-        Output('alert-msg', 'children'),
+        Output('query-msg', 'children'),
         Output('columns-memory', 'data'),
         Output('dl-button', 'style'),
     ],
