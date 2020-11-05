@@ -18,7 +18,6 @@ session_id = str(uuid.uuid4())
 
 # TODO: AD Security
 # TODO: Benchmarking: All refinerys, user sample type and date, but highlighting a specific refinery. Benchmark Toggle Button
-# TODO: Autohide Z-axis if not needed for graph
 # TODO: Trendline for 2d scatter
 # TODO: Query by Result Values like Alteryx
 # TODO: Increase graph height for 3D plot

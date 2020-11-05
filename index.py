@@ -157,13 +157,13 @@ def control_tabs():
                                             searchable=False,
                                         ),
                                         html.Br(),
-                                        html.P('X-Axis'),
+                                        html.P('X-Axis', id='x-text'),
                                         dcc.Dropdown(id='x-col'),
                                         html.Br(),
-                                        html.P('Y-Axis'),
+                                        html.P('Y-Axis', id='y-text'),
                                         dcc.Dropdown(id='y-col'),
                                         html.Br(),
-                                        html.P('Z-Axis'),
+                                        html.P('Z-Axis', id='z-text'),
                                         dcc.Dropdown(id='z-col'),
                                     ]
                                 ),
@@ -327,6 +327,20 @@ def update_axis_selector(col_list, x, y, z):
     y_col = [{'label': i, 'value': i, 'disabled': i in [x, z]} for i in col_list]
     z_col = [{'label': i, 'value': i, 'disabled': i in [x, y]} for i in col_list]
     return x_col, y_col, z_col
+
+
+@app.callback(
+    [
+        Output('z-col', 'style'),
+        Output('z-text', 'style')
+    ],
+    [Input('graph-type', 'value')]
+)
+def update_data_options(g_type):
+    if g_type == 'Scatter_3D':
+        return dict(), dict()
+    else:
+        return dict(display='none'), dict(display='none')
 
 
 @app.callback(
