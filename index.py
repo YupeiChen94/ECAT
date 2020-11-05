@@ -1,4 +1,5 @@
 import dash
+import dash_daq as daq
 import dash_bootstrap_components as dbc
 import dash_core_components as dcc
 import dash_html_components as html
@@ -169,12 +170,23 @@ def control_tabs():
                                 ),
                                 dbc.Collapse(
                                     id='analysis-collapse', is_open=False, children=[
-                                        html.P('Analysis')
+                                        html.Br(),
+                                        html.Div([
+                                            html.Div(html.P('Trend Type'),
+                                                     style={'display': 'inline-block', 'marginRight': 40}),
+                                            html.Div(
+                                                daq.ToggleSwitch(
+                                                    id='trend-type',
+                                                    label='OLS',
+                                                    labelPosition='bottom'
+                                                ), style={'display': 'inline-block'}
+                                            ),
+                                        ])
                                     ]
                                 ),
                                 dbc.Collapse(
                                     id='customization-collapse', is_open=False, children=[
-                                        html.P('Customizations')
+                                        html.P('Insert Customizations Here')
                                     ]
                                 )
                             ]
@@ -344,6 +356,17 @@ def update_data_options(g_type):
 
 
 @app.callback(
+    Output('trend-type', 'label'),
+    [Input('trend-type', 'value')]
+)
+def update_trend_label(value):
+    if value:
+        return 'LOESS'
+    else:
+        return 'OLS'
+
+
+@app.callback(
     Output('custom-graph', 'figure'),
     [Input('render-button', 'n_clicks')],
     [
@@ -351,10 +374,11 @@ def update_data_options(g_type):
         State('y-col', 'value'),
         State('z-col', 'value'),
         State('graph-type', 'value'),
-        State('legend-col', 'value')
+        State('legend-col', 'value'),
+        State('trend-type', 'value')
     ]
 )
-def render_graph(n_clicks, x, y, z, graph_type, legend):
+def render_graph(n_clicks, x, y, z, graph_type, legend, trend_type):
     if n_clicks < 1:
         raise PreventUpdate
     df = cache.get(session_id)
@@ -363,7 +387,7 @@ def render_graph(n_clicks, x, y, z, graph_type, legend):
         raise PreventUpdate
     else:
         if graph_type == 'Scatter':
-            fig = px.scatter(df, x=x, y=y, color=legend, trendline='lowess')
+            fig = px.scatter(df, x=x, y=y, color=legend, trendline='lowess' if trend_type else 'ols')
         elif graph_type == 'Scatter_3D':
             fig = px.scatter_3d(df, x=x, y=y, z=z, color=legend)
         fig.update_layout(legend=dict(
