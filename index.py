@@ -1,3 +1,4 @@
+import dash
 import dash_bootstrap_components as dbc
 import dash_core_components as dcc
 import dash_html_components as html
@@ -11,6 +12,7 @@ import pandas as pd
 from datetime import date
 from socket import gethostname
 import time
+import statsmodels
 
 from app import app, server, cache, session_id
 
@@ -33,7 +35,7 @@ q_units_string = """
                         SELECT DISTINCT REFINERY_ID, REFINERY_NAME FROM eCat.dbo.Liquid_Samples_vw) AS Sub
                         ORDER BY Sub.REFINERY_ID"""
 q_units = pd.read_sql_query(q_units_string, cnxn)
-q_units['Refinery'] = q_units['REFINERY_NAME'] + ' (' + q_units['REFINERY_ID'].astype(str) + ')'
+q_units['Refinery'] = q_units['REFINERY_NAME'].astype(str) + ' (' + q_units['REFINERY_ID'].astype(str) + ')'
 q_units_list = sorted(q_units['Refinery'].values.tolist())
 q_sample_types_string = """
                         SELECT DISTINCT Sub.Sample_Type
@@ -129,38 +131,52 @@ def control_tabs():
                         html.Div(
                             id='graph-card', children=[
                                 html.Br(),
-                                html.P('Graph Type'),
-                                dcc.Dropdown(
-                                    id='graph-type',
-                                    options=[{'label': i, 'value': i} for i in graph_types],
-                                    value=graph_types[0],
-                                    searchable=False,
+                                html.Div([
+                                    dbc.Button('Data', color='primary', id='option-data-btn', className='mr-3'),
+                                    dbc.Button('Analysis', color='primary', id='option-analysis-btn', className='mr-3'),
+                                    dbc.Button('Customizations', color='primary', id='option-customization-btn', className='mr-3'),
+                                    dbc.Button('Render Graphs', color='success', id='render-button', n_clicks=0)
+                                ]),
+                                dbc.Collapse(
+                                    id='data-collapse', is_open=True, children=[
+                                        html.Br(),
+                                        html.P('Graph Type'),
+                                        dcc.Dropdown(
+                                            id='graph-type',
+                                            options=[{'label': i, 'value': i} for i in graph_types],
+                                            value=graph_types[0],
+                                            searchable=False,
+                                        ),
+                                        html.Br(),
+                                        html.P('Legend'),
+                                        dcc.Dropdown(
+                                            id='legend-col',
+                                            options=[{'label': i, 'value': i} for i in
+                                                     ['Refinery_Name', 'Current_Catalyst']],
+                                            value='Refinery_Name',
+                                            searchable=False,
+                                        ),
+                                        html.Br(),
+                                        html.P('X-Axis'),
+                                        dcc.Dropdown(id='x-col'),
+                                        html.Br(),
+                                        html.P('Y-Axis'),
+                                        dcc.Dropdown(id='y-col'),
+                                        html.Br(),
+                                        html.P('Z-Axis'),
+                                        dcc.Dropdown(id='z-col'),
+                                    ]
                                 ),
-                                html.Br(),
-                                html.P('Legend'),
-                                dcc.Dropdown(
-                                    id='legend-col',
-                                    options=[{'label': i, 'value': i} for i in ['Refinery_Name', 'Current_Catalyst']],
-                                    value='Refinery_Name',
-                                    searchable=False,
+                                dbc.Collapse(
+                                    id='analysis-collapse', is_open=False, children=[
+                                        html.P('Analysis')
+                                    ]
                                 ),
-                                html.Br(),
-                                html.P('X-Axis'),
-                                dcc.Dropdown(
-                                    id='x-col',
-                                ),
-                                html.Br(),
-                                html.P('Y-Axis'),
-                                dcc.Dropdown(
-                                    id='y-col',
-                                ),
-                                html.Br(),
-                                html.P('Z-Axis'),
-                                dcc.Dropdown(
-                                    id='z-col',
-                                ),
-                                html.Br(),
-                                dbc.Button('Render Graphs', color='primary', id='render-button', n_clicks=0)
+                                dbc.Collapse(
+                                    id='customization-collapse', is_open=False, children=[
+                                        html.P('Customizations')
+                                    ]
+                                )
                             ]
                         )
                     ])
@@ -227,6 +243,7 @@ app.layout = dbc.Container(
 )
 
 
+# region Callbacks
 @app.callback(
     Output('render-msg', 'children'),
     [Input('render-button', 'n_clicks')]
@@ -264,8 +281,6 @@ def query(n_clicks, sample_type, sdate, edate, refinery):
     params = [sample_type, sdate, edate]
     params += refinery_list
 
-    # TODO: Add an option for 'all' refinery units
-
     q_string = """Select *
                         FROM dbo.Dry_Samples_vw
                         WHERE Sample_Type = {0} 
@@ -274,7 +289,7 @@ def query(n_clicks, sample_type, sdate, edate, refinery):
     if wet:
         q_string = q_string.replace('dbo.Dry_Samples_vw', 'dbo.Liquid_Samples_vw')
     q_string = q_string.format('?', ','.join('?' * len(refinery_list)))
-    df = pd.read_sql_query(q_string, cnxn, params=params)
+    df = pd.read_sql_query(q_string, cnxn, params=params, parse_dates=['Sample_Date'])
     df.dropna(axis='columns', how='all', inplace=True)
 
     columns = df.columns.tolist()
@@ -333,9 +348,8 @@ def render_graph(n_clicks, x, y, z, graph_type, legend):
         # TODO: Alert to user that there is no data to render
         raise PreventUpdate
     else:
-        # TODO: Trendline option?
         if graph_type == 'Scatter':
-            fig = px.scatter(df, x=x, y=y, color=legend)
+            fig = px.scatter(df, x=x, y=y, color=legend, trendline='lowess')
         elif graph_type == 'Scatter_3D':
             fig = px.scatter_3d(df, x=x, y=y, z=z, color=legend)
         fig.update_layout(legend=dict(
@@ -360,6 +374,39 @@ def generate_csv(n_clicks):
         raise PreventUpdate
     else:
         return send_data_frame(df.to_csv, filename='querydata.csv')
+
+
+@app.callback(
+    [
+        Output('data-collapse', 'is_open'),
+        Output('analysis-collapse', 'is_open'),
+        Output('customization-collapse', 'is_open')
+    ],
+    [
+        Input('option-data-btn', 'n_clicks'),
+        Input('option-analysis-btn', 'n_clicks'),
+        Input('option-customization-btn', 'n_clicks')
+    ],
+    [
+        State('data-collapse', 'is_open'),
+        State('analysis-collapse', 'is_open'),
+        State('customization-collapse', 'is_open')
+    ]
+)
+def toggle_collapse(d_click, a_click, c_click, d_state, a_state, c_state):
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return False, False, False
+    else:
+        btn_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    if btn_id == 'option-data-btn' and d_click:
+        return not d_state, False, False
+    elif btn_id == 'option-analysis-btn' and a_click:
+        return False, not a_state, False
+    elif btn_id == 'option-customization-btn' and c_click:
+        return False, False, not c_state
+    return False, False, False
+# endregion
 
 
 if __name__ == '__main__':
