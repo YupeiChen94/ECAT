@@ -8,6 +8,7 @@ from dash.exceptions import PreventUpdate
 from dash_extensions import Download
 from dash_extensions.snippets import send_data_frame
 import plotly.express as px
+import plotly.graph_objects as go
 import pyodbc
 import pandas as pd
 from datetime import date
@@ -118,16 +119,18 @@ def control_tabs():
                                     persistence_type='local',
                                 ),
                                 html.Br(),
-                                html.Br(),
-                                html.P(id='refinery-text', children=['Select Refinery Unit(s)']),
-                                dcc.Dropdown(
-                                    id='refinery-select',
-                                    options=[{'label': str(c), 'value': str(c)} for c in q_units_list],
-                                    multi=True,
-                                    persistence=True,
-                                    persisted_props=['value'],
-                                    persistence_type='local',
-                                ),
+                                html.Div(id='refinery-div', children=[
+                                    html.Br(),
+                                    html.P('Select Refinery Unit(s)'),
+                                    dcc.Dropdown(
+                                        id='refinery-select',
+                                        options=[{'label': str(c), 'value': str(c)} for c in q_units_list],
+                                        multi=True,
+                                        persistence=True,
+                                        persisted_props=['value'],
+                                        persistence_type='local',
+                                    ),
+                                ]),
                                 html.Br(),
                                 dbc.Button('Query ECAT DB', color='primary', id='query-button', n_clicks=0, className='mr-5'),
                                 dbc.Button('Download CSV', color='info', id='dl-button', n_clicks=0, style=dict(display='none')),
@@ -159,24 +162,40 @@ def control_tabs():
                                             value=graph_types[0],
                                             searchable=False,
                                         ),
-                                        html.Br(),
-                                        html.P('Legend'),
-                                        dcc.Dropdown(
-                                            id='legend-col',
-                                            options=[{'label': i, 'value': i} for i in
-                                                     ['Refinery_Name', 'Current_Catalyst']],
-                                            value='Refinery_Name',
-                                            searchable=False,
-                                        ),
-                                        html.Br(),
-                                        html.P('X-Axis', id='x-text'),
-                                        dcc.Dropdown(id='x-col'),
-                                        html.Br(),
-                                        html.P('Y-Axis', id='y-text'),
-                                        dcc.Dropdown(id='y-col'),
-                                        html.Br(),
-                                        html.P('Z-Axis', id='z-text'),
-                                        dcc.Dropdown(id='z-col'),
+                                        html.Div(id='legend-div', children=[
+                                            html.Br(),
+                                            html.P('Legend'),
+                                            dcc.Dropdown(
+                                                id='legend-col',
+                                                options=[{'label': i, 'value': i} for i in
+                                                         ['Refinery_Name', 'Current_Catalyst']],
+                                                value='Refinery_Name',
+                                                searchable=False,
+                                            ),
+                                        ]),
+                                        html.Div(id='highlight-div', children=[
+                                            html.Br(),
+                                            html.P('Highlight'),
+                                            dcc.Dropdown(
+                                                id='highlight-select',
+                                                options=[{'label': str(c), 'value': str(c)} for c in q_units_list],
+                                                multi=False,
+                                                persistence=True,
+                                                persisted_props=['value'],
+                                                persistence_type='local',
+                                            ),
+                                        ]),
+                                        html.Div(id='axis-selectors', children=[
+                                            html.Br(),
+                                            html.P('X-Axis', id='x-text'),
+                                            dcc.Dropdown(id='x-col'),
+                                            html.Br(),
+                                            html.P('Y-Axis', id='y-text'),
+                                            dcc.Dropdown(id='y-col'),
+                                            html.Br(),
+                                            html.P('Z-Axis', id='z-text'),
+                                            dcc.Dropdown(id='z-col'),
+                                        ]),
                                     ]
                                 ),
                                 dbc.Collapse(
@@ -379,16 +398,19 @@ def update_data_options(g_type):
 
 @app.callback(
     [
-        Output('refinery-select', 'style'),
-        Output('refinery-text', 'style')
+        Output('refinery-div', 'style'),
+        Output('legend-div', 'style'),
+        Output('highlight-div', 'style'),
     ],
     [Input('benchmark-toggle', 'value')]
 )
 def update_data_options(benchmark_toggle):
+    s = dict()
+    h = dict(display='none')
     if not benchmark_toggle:
-        return dict(), dict()
+        return s, s, h
     else:
-        return dict(display='none'), dict(display='none')
+        return h, h, s
 
 
 @app.callback(
@@ -437,20 +459,22 @@ def render_graph(n_clicks, x, y, z, benchmark_toggle, graph_type, legend, trend_
         # TODO: Alert to user that there is no data to render
         raise PreventUpdate
     else:
-        trend = '' if benchmark_toggle else 'ols' if trend_type else 'lowess'
-        if graph_type == 'Scatter':
-            fig = px.scatter(df, x=x, y=y, color=legend, trendline=trend)
-        elif graph_type == 'Scatter_3D':
-            fig = px.scatter_3d(df, x=x, y=y, z=z, color=legend)
-
-        # TODO: Fix legend for benchmarking scenario
-        fig.update_layout(legend=dict(
-            orientation="h",
-            yanchor="top",
-            y=1.05,
-            xanchor="left",
-            x=0
-        ))
+        if benchmark_toggle:
+            # Benchmark Plot using ScatterGL for increased speed
+            # TODO: Fix legend for benchmarking scenario
+            fig = go.Figure(data=go.Scattergl(x=df[x], y=df[y], mode='markers'))
+        else:
+            if graph_type == 'Scatter':
+                fig = px.scatter(df, x=x, y=y, color=legend, trendline='ols' if trend_type else 'lowess')
+            elif graph_type == 'Scatter_3D':
+                fig = px.scatter_3d(df, x=x, y=y, z=z, color=legend)
+            fig.update_layout(legend=dict(
+                orientation="h",
+                yanchor="top",
+                y=1.05,
+                xanchor="left",
+                x=0
+            ))
         return fig
 
 
