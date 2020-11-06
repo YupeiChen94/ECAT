@@ -59,32 +59,43 @@ def control_tabs():
     """
     return html.Div(
         id='ecat-control-tabs',
-        className='control-tabs',
         children=[
             dcc.Tabs(id='ecat-tabs', value='what-is', children=[
                 dcc.Tab(
                     label='About',
                     value='what-is',
-                    children=html.Div(className='control-tab', children=[
-                        html.H4(className='what-is', children='Purpose?'),
+                    children=html.Div(children=[
+                        html.H4(children='Purpose?'),
                         html.P('ECAT Reporting Tool is a visualizer that allows you to explore ECAT data '
                                'in multiple representations.'),
                         html.P('You can query by sample type, refinery, and date ranges '),
-                        html.P('Version 0.3 - 10/28/20'),
+                        html.P('Version 0.4 - 10/28/20'),
                         dcc.Markdown("""Author: [Yupei Chen](mailto:Yupei.Chen@Albemarle.com)""")
                     ])
                 ),
                 dcc.Tab(
                     label='Database Query',
                     value='query',
-                    children=html.Div(className='control-tab', children=[
+                    children=html.Div(children=[
                         html.Div(
                             id='query-card', children=[
+                                html.Br(),
+                                html.Div([
+                                    html.Div(html.P(id='benchmark-text', children=['Benchmarking OFF']),
+                                             style={'display': 'inline-block', 'marginRight': 40}),
+                                    html.Div(
+                                        daq.ToggleSwitch(
+                                            id='benchmark-toggle',
+                                            value=False,
+                                        ), style={'display': 'inline-block'}
+                                    ),
+                                ]),
                                 html.Br(),
                                 html.P('Select Sample Type'),
                                 dcc.Dropdown(
                                     id='sample-type-select',
-                                    options=[{'label': str(c), 'value': str(c)} for c in q_sample_types],
+                                    # ECAT_LO disabled, confidential data
+                                    options=[{'label': str(c), 'value': str(c), 'disabled': True if c == 'ECAT_LO' else False} for c in q_sample_types],
                                     multi=False,
                                     searchable=False,
                                     value=q_sample_types[0],
@@ -108,7 +119,7 @@ def control_tabs():
                                 ),
                                 html.Br(),
                                 html.Br(),
-                                html.P('Select Refinery Unit(s)'),
+                                html.P(id='refinery-text', children=['Select Refinery Unit(s)']),
                                 dcc.Dropdown(
                                     id='refinery-select',
                                     options=[{'label': str(c), 'value': str(c)} for c in q_units_list],
@@ -128,7 +139,7 @@ def control_tabs():
                 dcc.Tab(
                     label='Graph Options',
                     value='graph-options',
-                    children=html.Div(className='control-tab', children=[
+                    children=html.Div(children=[
                         html.Div(
                             id='graph-card', children=[
                                 html.Br(),
@@ -171,13 +182,14 @@ def control_tabs():
                                 dbc.Collapse(
                                     id='analysis-collapse', is_open=False, children=[
                                         html.Br(),
-                                        html.Div([
+                                        html.Div(id='trend-div', children=[
                                             html.Div(html.P('Trend Type'),
                                                      style={'display': 'inline-block', 'marginRight': 40}),
                                             html.Div(
                                                 daq.ToggleSwitch(
                                                     id='trend-type',
-                                                    label='OLS',
+                                                    label='LOESS',
+                                                    value=False,
                                                     labelPosition='bottom'
                                                 ), style={'display': 'inline-block'}
                                             ),
@@ -204,7 +216,6 @@ def custom_graph():
     """
     return html.Div(
         id='custom-graph-div',
-        className='graph-div',
         children=[
             dcc.Graph(
                 id='custom-graph',
@@ -279,36 +290,47 @@ def render_msg(n_clicks):
         State('sample-type-select', 'value'),
         State('date-picker-select', 'start_date'),
         State('date-picker-select', 'end_date'),
-        State('refinery-select', 'value')
+        State('refinery-select', 'value'),
+        State('benchmark-toggle', 'value')
     ]
 )
-def query(n_clicks, sample_type, sdate, edate, refinery):
+def query(n_clicks, sample_type, sdate, edate, refinery, benchmark_toggle):
     # TODO: Try block to validate query returns data, return error as alert
     if n_clicks < 1:
         raise PreventUpdate
     t0 = time.time()
-    refinery_list = q_units[q_units.Refinery.isin(refinery)]
-    refinery_list = refinery_list['REFINERY_ID'].tolist()
-    wet = True if sample_type in ['WGS', 'SLURRY FINES 1', 'FEED'] else False
     params = [sample_type, sdate, edate]
-    params += refinery_list
 
+    # Base SQL Statement
     q_string = """Select *
                         FROM dbo.Dry_Samples_vw
                         WHERE Sample_Type = {0} 
-                        AND Sample_Date BETWEEN {0} and {0}
-                        AND Refinery_ID IN ({1})"""
-    if wet:
+                        AND Sample_Date BETWEEN {0} and {0}"""
+    q_string = q_string.format('?')
+    if sample_type in ['WGS', 'SLURRY FINES 1', 'FEED']:
         q_string = q_string.replace('dbo.Dry_Samples_vw', 'dbo.Liquid_Samples_vw')
-    q_string = q_string.format('?', ','.join('?' * len(refinery_list)))
+
+    # Modification for Benchmarking
+    if not benchmark_toggle:
+        refinery_list = q_units[q_units.Refinery.isin(refinery)]
+        refinery_list = refinery_list['REFINERY_ID'].tolist()
+        params += refinery_list
+        q_string += ' AND Refinery_ID IN ({0})'
+        q_string = q_string.format(','.join('?' * len(refinery_list)))
+
+    # Read SQL
     df = pd.read_sql_query(q_string, cnxn, params=params, parse_dates=['Sample_Date'])
+
+    # Post-Read Format
     df.dropna(axis='columns', how='all', inplace=True)
 
+    # Columns Setup
     columns = df.columns.tolist()
     col_to_remove = ['Sample_Number', 'Arrival_Date', 'Refinery_ID', 'Sampling_Point', 'Sample_Type', 'Comment', 'ECAT_Original_ID']
     col_to_remove += ['SF_Account_ID', 'Current_Catalyst', 'Current_Supplier', 'Refinery_Name', 'Sample_Year', 'Create_Date', 'Update_Date']
     columns = [i for i in columns if i not in col_to_remove]
 
+    # Cache Data
     cache.set(session_id, df)
 
     t1 = time.time()
@@ -356,14 +378,42 @@ def update_data_options(g_type):
 
 
 @app.callback(
+    [
+        Output('refinery-select', 'style'),
+        Output('refinery-text', 'style')
+    ],
+    [Input('benchmark-toggle', 'value')]
+)
+def update_data_options(benchmark_toggle):
+    if not benchmark_toggle:
+        return dict(), dict()
+    else:
+        return dict(display='none'), dict(display='none')
+
+
+@app.callback(
     Output('trend-type', 'label'),
     [Input('trend-type', 'value')]
 )
 def update_trend_label(value):
     if value:
-        return 'LOESS'
-    else:
         return 'OLS'
+    else:
+        return 'LOESS'
+
+
+@app.callback(
+    [
+        Output('benchmark-text', 'children'),
+        Output('trend-div', 'style')
+    ],
+    [Input('benchmark-toggle', 'value')]
+)
+def update_benchmark_text(value):
+    if value:
+        return ['Benchmarking ON'], dict(display='none')
+    else:
+        return ['Benchmarking OFF'], dict()
 
 
 @app.callback(
@@ -373,12 +423,13 @@ def update_trend_label(value):
         State('x-col', 'value'),
         State('y-col', 'value'),
         State('z-col', 'value'),
+        State('benchmark-toggle', 'value'),
         State('graph-type', 'value'),
         State('legend-col', 'value'),
         State('trend-type', 'value')
     ]
 )
-def render_graph(n_clicks, x, y, z, graph_type, legend, trend_type):
+def render_graph(n_clicks, x, y, z, benchmark_toggle, graph_type, legend, trend_type):
     if n_clicks < 1:
         raise PreventUpdate
     df = cache.get(session_id)
@@ -386,10 +437,13 @@ def render_graph(n_clicks, x, y, z, graph_type, legend, trend_type):
         # TODO: Alert to user that there is no data to render
         raise PreventUpdate
     else:
+        trend = '' if benchmark_toggle else 'ols' if trend_type else 'lowess'
         if graph_type == 'Scatter':
-            fig = px.scatter(df, x=x, y=y, color=legend, trendline='lowess' if trend_type else 'ols')
+            fig = px.scatter(df, x=x, y=y, color=legend, trendline=trend)
         elif graph_type == 'Scatter_3D':
             fig = px.scatter_3d(df, x=x, y=y, z=z, color=legend)
+
+        # TODO: Fix legend for benchmarking scenario
         fig.update_layout(legend=dict(
             orientation="h",
             yanchor="top",
