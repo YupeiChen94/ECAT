@@ -16,12 +16,9 @@ app = dash.Dash(__name__, server=server, external_stylesheets=[dbc.themes.SPACEL
 cache = Cache(app.server, config=config)
 session_id = str(uuid.uuid4())
 
-# TODO: Benchmarking: All refinerys, user sample type and date, but highlighting a specific refinery
-
 # TODO: Disable graph options tab until data is queried? Notification to please requery if benchmarking is toggled?
 # TODO: AD Security
 # TODO: Query by Result Values like Alteryx
 # TODO: Increase graph height for 3D plot
 # TODO: Standard Graphs, PDF download?
 # TODO: Graphic Customizations
-# TODO: Move div styling to css page

@@ -14,6 +14,7 @@ import pandas as pd
 from datetime import date
 from socket import gethostname
 import time
+import re
 import statsmodels
 
 from app import app, server, cache, session_id
@@ -448,10 +449,11 @@ def update_benchmark_text(value):
         State('benchmark-toggle', 'value'),
         State('graph-type', 'value'),
         State('legend-col', 'value'),
+        State('highlight-select', 'value'),
         State('trend-type', 'value')
     ]
 )
-def render_graph(n_clicks, x, y, z, benchmark_toggle, graph_type, legend, trend_type):
+def render_graph(n_clicks, x, y, z, benchmark_toggle, graph_type, legend, select, trend_type):
     if n_clicks < 1:
         raise PreventUpdate
     df = cache.get(session_id)
@@ -461,20 +463,26 @@ def render_graph(n_clicks, x, y, z, benchmark_toggle, graph_type, legend, trend_
     else:
         if benchmark_toggle:
             # Benchmark Plot using ScatterGL for increased speed
-            # TODO: Fix legend for benchmarking scenario
-            fig = go.Figure(data=go.Scattergl(x=df[x], y=df[y], mode='markers'))
+            # Regex looks for any number of digits between parenthesis
+            refinery_id = re.search(r"(?<=\()\d+(?=\))", select).group(0)
+            df2 = df[df.Refinery_ID.eq(refinery_id)]
+            trace_benchmark = go.Scattergl(x=df[x], y=df[y], name='Industry Standard', mode='markers', marker=dict(opacity=0.5))
+            trace_target = go.Scattergl(x=df2[x], y=df2[y], name=select, mode='markers', marker=dict(color='red'))
+            data = [trace_benchmark, trace_target]
+            layout = go.Layout(title='Benchmarking Plot')
+            fig = go.Figure(data=data, layout=layout)
         else:
             if graph_type == 'Scatter':
                 fig = px.scatter(df, x=x, y=y, color=legend, trendline='ols' if trend_type else 'lowess')
             elif graph_type == 'Scatter_3D':
                 fig = px.scatter_3d(df, x=x, y=y, z=z, color=legend)
-            fig.update_layout(legend=dict(
-                orientation="h",
-                yanchor="top",
-                y=1.05,
-                xanchor="left",
-                x=0
-            ))
+        fig.update_layout(legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        ))
         return fig
 
 
