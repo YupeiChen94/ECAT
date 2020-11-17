@@ -28,5 +28,4 @@ session_id = str(uuid.uuid4())
 # TODO: Trendline for benchmarking
 
 # TODO: Options for regression line to be turned off
-# TODO: Labels missing on benchmarking
 # TODO: Increase cache to 200

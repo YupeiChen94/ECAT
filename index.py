@@ -469,7 +469,7 @@ def render_graph(n_clicks, x, y, z, benchmark_toggle, graph_type, legend, select
             trace_benchmark = go.Scattergl(x=df[x], y=df[y], name='Industry Standard', mode='markers', marker=dict(opacity=0.5))
             trace_target = go.Scattergl(x=df2[x], y=df2[y], name=select, mode='markers', marker=dict(color='red'))
             data = [trace_benchmark, trace_target]
-            layout = go.Layout(title='Benchmarking Plot')
+            layout = go.Layout(title='Benchmarking Plot', xaxis_title=x, yaxis_title=y)
             fig = go.Figure(data=data, layout=layout)
         else:
             if graph_type == 'Scatter':
