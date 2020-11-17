@@ -206,12 +206,24 @@ def control_tabs():
                                             html.Div(html.P('Trend Type'),
                                                      style={'display': 'inline-block', 'marginRight': 40}),
                                             html.Div(
-                                                daq.ToggleSwitch(
+                                                # daq.ToggleSwitch(
+                                                #     id='trend-type',
+                                                #     label='LOESS',
+                                                #     value=False,
+                                                #     labelPosition='bottom'
+                                                # ),
+                                                dcc.RadioItems(
                                                     id='trend-type',
-                                                    label='LOESS',
-                                                    value=False,
-                                                    labelPosition='bottom'
-                                                ), style={'display': 'inline-block'}
+                                                    options=[
+                                                        {'label': 'OFF', 'value': 'OFF'},
+                                                        {'label': 'LOESS', 'value': 'LOESS'},
+                                                        {'label': 'OLS', 'value': 'OLS'}
+                                                    ],
+                                                    value='OFF',
+                                                    labelStyle={'display': 'inline-block'},
+                                                    inputStyle={"margin-left": "20px"}
+                                                ),
+                                                style={'display': 'inline-block'}
                                             ),
                                         ])
                                     ]
@@ -414,15 +426,15 @@ def update_data_options(benchmark_toggle):
         return h, h, s
 
 
-@app.callback(
-    Output('trend-type', 'label'),
-    [Input('trend-type', 'value')]
-)
-def update_trend_label(value):
-    if value:
-        return 'OLS'
-    else:
-        return 'LOESS'
+# @app.callback(
+#     Output('trend-type', 'label'),
+#     [Input('trend-type', 'value')]
+# )
+# def update_trend_label(value):
+#     if value:
+#         return 'OLS'
+#     else:
+#         return 'LOESS'
 
 
 @app.callback(
@@ -461,7 +473,7 @@ def render_graph(n_clicks, x, y, z, benchmark_toggle, graph_type, legend, select
         # TODO: Alert to user that there is no data to render
         raise PreventUpdate
     else:
-        if benchmark_toggle:
+        if benchmark_toggle != 'OFF':
             # Benchmark Plot using ScatterGL for increased speed
             # Regex looks for any number of digits between parenthesis
             refinery_id = re.search(r"(?<=\()\d+(?=\))", select).group(0)
