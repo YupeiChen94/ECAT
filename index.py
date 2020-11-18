@@ -15,7 +15,7 @@ from datetime import date
 from socket import gethostname
 import time
 import re
-import statsmodels
+import statsmodels.api as sm
 
 from app import app, server, cache, session_id
 
@@ -215,11 +215,11 @@ def control_tabs():
                                                 dcc.RadioItems(
                                                     id='trend-type',
                                                     options=[
-                                                        {'label': 'OFF', 'value': 'OFF'},
-                                                        {'label': 'LOESS', 'value': 'LOESS'},
-                                                        {'label': 'OLS', 'value': 'OLS'}
+                                                        {'label': 'OFF', 'value': 'none'},
+                                                        {'label': 'LOWESS', 'value': 'lowess'},
+                                                        {'label': 'OLS', 'value': 'ols'}
                                                     ],
-                                                    value='OFF',
+                                                    value='none',
                                                     labelStyle={'display': 'inline-block'},
                                                     inputStyle={"margin-left": "20px"}
                                                 ),
@@ -489,7 +489,7 @@ def render_graph(n_clicks, x, y, z, benchmark_toggle, graph_type, legend, select
             fig = go.Figure(data=data, layout=layout)
         else:
             if graph_type == 'Scatter':
-                fig = px.scatter(df, x=x, y=y, color=legend, trendline='ols' if trend_type else 'lowess')
+                fig = px.scatter(df, x=x, y=y, color=legend, trendline=trend_type)
             elif graph_type == 'Scatter_3D':
                 fig = px.scatter_3d(df, x=x, y=y, z=z, color=legend)
         fig.update_layout(legend=dict(
