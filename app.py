@@ -23,6 +23,9 @@ session_id = str(uuid.uuid4())
 # TODO: Graphic Customizations
 
 # TODO: Legend to plot multiple variables at a time
-# TODO: Benchmarking for multiple refinerys at once
+# TODO: Make multiple queries and save them, option for multi-graph where parameters for each graph can be set
 # TODO: Filter by result value post query, popup with dynamic selections?
-# TODO: Trendline for benchmarking
+# TODO: Larger x and y variables
+# TODO: Remove background on plot
+
+# TODO: Trendline for benchmarking on only highlighted points?

@@ -180,7 +180,7 @@ def control_tabs():
                                             dcc.Dropdown(
                                                 id='highlight-select',
                                                 options=[{'label': str(c), 'value': str(c)} for c in q_units_list],
-                                                multi=False,
+                                                multi=True,
                                                 persistence=True,
                                                 persisted_props=['value'],
                                                 persistence_type='local',
@@ -465,7 +465,7 @@ def update_benchmark_text(value):
         State('trend-type', 'value')
     ]
 )
-def render_graph(n_clicks, x, y, z, benchmark_toggle, graph_type, legend, select, trend_type):
+def render_graph(n_clicks, x, y, z, benchmark_toggle, graph_type, legend, selects, trend_type):
     if n_clicks < 1:
         raise PreventUpdate
     df = cache.get(session_id)
@@ -473,14 +473,18 @@ def render_graph(n_clicks, x, y, z, benchmark_toggle, graph_type, legend, select
         # TODO: Alert to user that there is no data to render
         raise PreventUpdate
     else:
-        if benchmark_toggle != 'OFF':
+        if benchmark_toggle:
             # Benchmark Plot using ScatterGL for increased speed
             # Regex looks for any number of digits between parenthesis
-            refinery_id = re.search(r"(?<=\()\d+(?=\))", select).group(0)
-            df2 = df[df.Refinery_ID.eq(refinery_id)]
-            trace_benchmark = go.Scattergl(x=df[x], y=df[y], name='Industry Standard', mode='markers', marker=dict(opacity=0.5))
-            trace_target = go.Scattergl(x=df2[x], y=df2[y], name=select, mode='markers', marker=dict(color='red'))
-            data = [trace_benchmark, trace_target]
+            refinery_id_list = list(map(lambda select: re.search(r"(?<=\()\d+(?=\))", select).group(0), selects))
+            trace_benchmark = go.Scattergl(x=df[x], y=df[y], name='Industry Standard', mode='markers', marker=dict(opacity=0.3))
+            data = [trace_benchmark]
+            for index, refinery in enumerate(refinery_id_list):
+                df2 = df[df.Refinery_ID.eq(refinery)]
+                trace_target = go.Scattergl(x=df2[x], y=df2[y], name=selects[index], mode='markers', marker=dict(size=10,
+                                                                                                                 line=dict(width=2,
+                                                                                                                           color='DarkSlateGrey')))
+                data.append(trace_target)
             layout = go.Layout(title='Benchmarking Plot', xaxis_title=x, yaxis_title=y)
             fig = go.Figure(data=data, layout=layout)
         else:
