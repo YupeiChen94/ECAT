@@ -28,4 +28,4 @@ session_id = str(uuid.uuid4())
 # TODO: Larger x and y variables
 # TODO: Remove background on plot
 
-# TODO: Trendline for benchmarking on only highlighted points?
+# TODO: Double Y axis scatter

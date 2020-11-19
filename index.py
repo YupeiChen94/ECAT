@@ -11,11 +11,13 @@ import plotly.express as px
 import plotly.graph_objects as go
 import pyodbc
 import pandas as pd
+import datetime as dt
 from datetime import date
 from socket import gethostname
 import time
 import re
 import statsmodels.api as sm
+from itertools import cycle
 
 from app import app, server, cache, session_id
 
@@ -206,20 +208,14 @@ def control_tabs():
                                             html.Div(html.P('Trend Type'),
                                                      style={'display': 'inline-block', 'marginRight': 40}),
                                             html.Div(
-                                                # daq.ToggleSwitch(
-                                                #     id='trend-type',
-                                                #     label='LOESS',
-                                                #     value=False,
-                                                #     labelPosition='bottom'
-                                                # ),
                                                 dcc.RadioItems(
                                                     id='trend-type',
                                                     options=[
-                                                        {'label': 'OFF', 'value': 'none'},
+                                                        {'label': 'OFF', 'value': 'off'},
                                                         {'label': 'LOWESS', 'value': 'lowess'},
                                                         {'label': 'OLS', 'value': 'ols'}
                                                     ],
-                                                    value='none',
+                                                    value='off',
                                                     labelStyle={'display': 'inline-block'},
                                                     inputStyle={"margin-left": "20px"}
                                                 ),
@@ -426,29 +422,21 @@ def update_data_options(benchmark_toggle):
         return h, h, s
 
 
-# @app.callback(
-#     Output('trend-type', 'label'),
-#     [Input('trend-type', 'value')]
-# )
-# def update_trend_label(value):
-#     if value:
-#         return 'OLS'
-#     else:
-#         return 'LOESS'
-
-
 @app.callback(
     [
         Output('benchmark-text', 'children'),
-        Output('trend-div', 'style')
+        Output('trend-type', 'options'),
+        Output('trend-type', 'value')
     ],
     [Input('benchmark-toggle', 'value')]
 )
 def update_benchmark_text(value):
     if value:
-        return ['Benchmarking ON'], dict(display='none')
+        options = [{'label': i, 'value': i.lower()} for i in ['OFF', 'LOWESS']]
+        return ['Benchmarking ON'], options, 'off'
     else:
-        return ['Benchmarking OFF'], dict()
+        options = [{'label': i, 'value': i.lower()} for i in ['OFF', 'LOWESS', 'OLS']]
+        return ['Benchmarking OFF'], options, 'off'
 
 
 @app.callback(
@@ -473,18 +461,32 @@ def render_graph(n_clicks, x, y, z, benchmark_toggle, graph_type, legend, select
         # TODO: Alert to user that there is no data to render
         raise PreventUpdate
     else:
+        palette = cycle(px.colors.qualitative.Plotly)
+        trend_type = 'none' if trend_type == 'off' else trend_type
         if benchmark_toggle:
             # Benchmark Plot using ScatterGL for increased speed
             # Regex looks for any number of digits between parenthesis
             refinery_id_list = list(map(lambda select: re.search(r"(?<=\()\d+(?=\))", select).group(0), selects))
-            trace_benchmark = go.Scattergl(x=df[x], y=df[y], name='Industry Standard', mode='markers', marker=dict(opacity=0.3))
+            trace_benchmark = go.Scattergl(x=df[x], y=df[y], name='Industry Standard', mode='markers', marker=dict(opacity=0.1, color='Grey'))
             data = [trace_benchmark]
             for index, refinery in enumerate(refinery_id_list):
-                df2 = df[df.Refinery_ID.eq(refinery)]
+                color = next(palette)
+                df2 = df[df.Refinery_ID.eq(refinery)][[x, y]]
                 trace_target = go.Scattergl(x=df2[x], y=df2[y], name=selects[index], mode='markers', marker=dict(size=10,
-                                                                                                                 line=dict(width=2,
+                                                                                                                 color=color,
+                                                                                                                 line=dict(width=1,
                                                                                                                            color='DarkSlateGrey')))
                 data.append(trace_target)
+                # regression
+                if trend_type != 'none':
+                    df2.dropna(inplace=True)
+                    if x == 'Sample_Date':
+                        date_series = pd.to_datetime(df2[x]).map(dt.datetime.toordinal)
+                        trend = sm.OLS(df2[y], sm.add_constant(date_series)).fit().fittedvalues
+                    else:
+                        trend = sm.OLS(df2[y], sm.add_constant(df2[x])).fit().fittedvalues
+                    trace_trend = go.Scattergl(x=df2[x], y=trend, name=selects[index] + ' trend', mode='lines', marker=dict(color=color))
+                    data.append(trace_trend)
             layout = go.Layout(title='Benchmarking Plot', xaxis_title=x, yaxis_title=y)
             fig = go.Figure(data=data, layout=layout)
         else:
