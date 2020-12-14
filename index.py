@@ -52,7 +52,7 @@ q_sample_types = pd.read_sql(q_sample_types_string, cnxn)['Sample_Type'].values.
 
 
 # region Constants
-graph_types = ['Scatter', 'Scatter_3D']
+graph_types = ['Scatter', 'Multi-Y Scatter']
 # endregion
 
 
@@ -73,7 +73,7 @@ def control_tabs():
                         html.P('ECAT Reporting Tool is a visualizer that allows you to explore ECAT data '
                                'in multiple representations.'),
                         html.P('You can query by sample type, refinery, and date ranges '),
-                        html.P('Version 0.4 - 10/28/20'),
+                        html.P('Version 0.5 - 11/19/20'),
                         dcc.Markdown("""Author: [Yupei Chen](mailto:Yupei.Chen@Albemarle.com)""")
                     ])
                 ),
@@ -432,7 +432,7 @@ def update_data_options(benchmark_toggle):
 )
 def update_benchmark_text(value):
     if value:
-        options = [{'label': i, 'value': i.lower()} for i in ['OFF', 'LOWESS']]
+        options = [{'label': i, 'value': i.lower()} for i in ['OFF', 'OLS']]
         return ['Benchmarking ON'], options, 'off'
     else:
         options = [{'label': i, 'value': i.lower()} for i in ['OFF', 'LOWESS', 'OLS']]
@@ -485,15 +485,13 @@ def render_graph(n_clicks, x, y, z, benchmark_toggle, graph_type, legend, select
                         trend = sm.OLS(df2[y], sm.add_constant(date_series)).fit().fittedvalues
                     else:
                         trend = sm.OLS(df2[y], sm.add_constant(df2[x])).fit().fittedvalues
-                    trace_trend = go.Scattergl(x=df2[x], y=trend, name=selects[index] + ' trend', mode='lines', marker=dict(color=color))
+                    trace_trend = go.Scattergl(x=df2[x], y=trend, name=selects[index] + ' Trace', mode='lines', marker=dict(color=color))
                     data.append(trace_trend)
             layout = go.Layout(title='Benchmarking Plot', xaxis_title=x, yaxis_title=y)
             fig = go.Figure(data=data, layout=layout)
         else:
             if graph_type == 'Scatter':
                 fig = px.scatter(df, x=x, y=y, color=legend, trendline=trend_type)
-            elif graph_type == 'Scatter_3D':
-                fig = px.scatter_3d(df, x=x, y=y, z=z, color=legend)
         fig.update_layout(legend=dict(
             orientation="h",
             yanchor="bottom",
@@ -515,6 +513,7 @@ def generate_csv(n_clicks):
     if df is None:
         raise PreventUpdate
     else:
+        df['Sample_Date'] = df['Sample_Date'].dt.strftime('%m/%d/%Y')
         return send_data_frame(df.to_csv, filename='querydata.csv')
 
 
