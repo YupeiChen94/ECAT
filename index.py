@@ -157,14 +157,16 @@ def control_tabs():
                                 ]),
                                 dbc.Collapse(
                                     id='data-collapse', is_open=True, children=[
-                                        html.Br(),
-                                        html.P('Graph Type'),
-                                        dcc.Dropdown(
-                                            id='graph-type',
-                                            options=[{'label': i, 'value': i} for i in graph_types],
-                                            value=graph_types[0],
-                                            searchable=False,
-                                        ),
+                                        html.Div(id='graph-type-div', children=[
+                                            html.Br(),
+                                            html.P('Graph Type'),
+                                            dcc.Dropdown(
+                                                id='graph-type',
+                                                options=[{'label': i, 'value': i} for i in graph_types],
+                                                value=graph_types[0],
+                                                searchable=False,
+                                            ),
+                                        ]),
                                         html.Div(id='legend-div', children=[
                                             html.Br(),
                                             html.P('Legend'),
@@ -410,6 +412,7 @@ def update_data_options(g_type):
         Output('refinery-div', 'style'),
         Output('legend-div', 'style'),
         Output('highlight-div', 'style'),
+        Output('graph-type-div', 'style'),
     ],
     [Input('benchmark-toggle', 'value')]
 )
@@ -417,9 +420,9 @@ def update_data_options(benchmark_toggle):
     s = dict()
     h = dict(display='none')
     if not benchmark_toggle:
-        return s, s, h
+        return s, s, h, s
     else:
-        return h, h, s
+        return h, h, s, h
 
 
 @app.callback(

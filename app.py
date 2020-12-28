@@ -28,4 +28,3 @@ session_id = str(uuid.uuid4())
 # TODO: Remove background on plot
 
 # TODO: Double Y axis scatter
-# TODO: Hide extra graph types if benchmarking
