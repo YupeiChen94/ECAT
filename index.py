@@ -9,6 +9,7 @@ from dash_extensions import Download
 from dash_extensions.snippets import send_data_frame
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import pyodbc
 import pandas as pd
 import datetime as dt
@@ -182,9 +183,21 @@ def control_tabs():
                                             html.Br(),
                                             html.P('Highlight'),
                                             dcc.Dropdown(
-                                                id='highlight-select',
+                                                id='highlight',
                                                 options=[{'label': str(c), 'value': str(c)} for c in q_units_list],
                                                 multi=True,
+                                                persistence=True,
+                                                persisted_props=['value'],
+                                                persistence_type='local',
+                                            ),
+                                        ]),
+                                        html.Div(id='select-div', children=[
+                                            html.Br(),
+                                            html.P('Select'),
+                                            dcc.Dropdown(
+                                                id='select',
+                                                # options=[{'label': str(c), 'value': str(c)} for c in q_units_list],
+                                                multi=False,
                                                 persistence=True,
                                                 persisted_props=['value'],
                                                 persistence_type='local',
@@ -197,9 +210,11 @@ def control_tabs():
                                             html.Br(),
                                             html.P('Y-Axis', id='y-text'),
                                             dcc.Dropdown(id='y-col'),
-                                            html.Br(),
-                                            html.P('Z-Axis', id='z-text'),
-                                            dcc.Dropdown(id='z-col'),
+                                            html.Div(id='y2-div', children=[
+                                                html.Br(),
+                                                html.P('Y2-Axis', id='y2-text'),
+                                                dcc.Dropdown(id='y2-col'),
+                                            ]),
                                         ]),
                                     ]
                                 ),
@@ -348,6 +363,8 @@ def query(n_clicks, sample_type, sdate, edate, refinery, benchmark_toggle):
         q_string += ' AND Refinery_ID IN ({0})'
         q_string = q_string.format(','.join('?' * len(refinery_list)))
 
+    q_string += ' ORDER BY Sample_Date ASC'
+
     # Read SQL
     df = pd.read_sql_query(q_string, cnxn, params=params, parse_dates=['Sample_Date'])
 
@@ -375,36 +392,46 @@ def query(n_clicks, sample_type, sdate, edate, refinery, benchmark_toggle):
     [
         Output('x-col', 'options'),
         Output('y-col', 'options'),
-        Output('z-col', 'options'),
+        Output('y2-col', 'options'),
     ],
     [
         Input('columns-memory', 'data'),
         Input('x-col', 'value'),
         Input('y-col', 'value'),
-        Input('z-col', 'value')
+        Input('y2-col', 'value')
     ]
 )
-def update_axis_selector(col_list, x, y, z):
+def update_axis_selector(col_list, x, y, y2):
     if col_list is None:
         raise PreventUpdate
-    x_col = [{'label': i, 'value': i, 'disabled': i in [y, z]} for i in col_list]
-    y_col = [{'label': i, 'value': i, 'disabled': i in [x, z]} for i in col_list]
-    z_col = [{'label': i, 'value': i, 'disabled': i in [x, y]} for i in col_list]
-    return x_col, y_col, z_col
+    x_col = [{'label': i, 'value': i, 'disabled': i in [y, y2]} for i in col_list]
+    y_col = [{'label': i, 'value': i, 'disabled': i in [x, y2]} for i in col_list]
+    y2_col = [{'label': i, 'value': i, 'disabled': i in [x, y]} for i in col_list]
+    return x_col, y_col, y2_col
+
+
+@app.callback(
+    Output('select', 'options'),
+    [Input('refinery-select', 'value')]
+)
+def set_select_options(selected_refineries):
+    return [{'label': str(c), 'value': str(c)} for c in selected_refineries]
 
 
 @app.callback(
     [
-        Output('z-col', 'style'),
-        Output('z-text', 'style')
+        Output('y2-div', 'style'),
+        Output('select-div', 'style')
     ],
     [Input('graph-type', 'value')]
 )
 def update_data_options(g_type):
-    if g_type == 'Scatter_3D':
-        return dict(), dict()
+    s = dict()
+    h = dict(display='none')
+    if g_type == 'Multi-Y Scatter':
+        return s, s
     else:
-        return dict(display='none'), dict(display='none')
+        return h, h
 
 
 @app.callback(
@@ -413,6 +440,7 @@ def update_data_options(g_type):
         Output('legend-div', 'style'),
         Output('highlight-div', 'style'),
         Output('graph-type-div', 'style'),
+        Output('graph-type', 'value')
     ],
     [Input('benchmark-toggle', 'value')]
 )
@@ -420,9 +448,9 @@ def update_data_options(benchmark_toggle):
     s = dict()
     h = dict(display='none')
     if not benchmark_toggle:
-        return s, s, h, s
+        return s, s, h, s, graph_types[0]
     else:
-        return h, h, s, h
+        return h, h, s, h, graph_types[0]
 
 
 @app.callback(
@@ -448,15 +476,16 @@ def update_benchmark_text(value):
     [
         State('x-col', 'value'),
         State('y-col', 'value'),
-        State('z-col', 'value'),
+        State('y2-col', 'value'),
         State('benchmark-toggle', 'value'),
         State('graph-type', 'value'),
         State('legend-col', 'value'),
-        State('highlight-select', 'value'),
+        State('highlight', 'value'),
+        State('select', 'value'),
         State('trend-type', 'value')
     ]
 )
-def render_graph(n_clicks, x, y, z, benchmark_toggle, graph_type, legend, selects, trend_type):
+def render_graph(n_clicks, x, y, y2, benchmark_toggle, graph_type, legend, highlight, selected, trend_type):
     if n_clicks < 1:
         raise PreventUpdate
     df = cache.get(session_id)
@@ -469,13 +498,13 @@ def render_graph(n_clicks, x, y, z, benchmark_toggle, graph_type, legend, select
         if benchmark_toggle:
             # Benchmark Plot using ScatterGL for increased speed
             # Regex looks for any number of digits between parenthesis
-            refinery_id_list = list(map(lambda select: re.search(r"(?<=\()\d+(?=\))", select).group(0), selects))
+            refinery_id_list = list(map(lambda select: re.search(r"(?<=\()\d+(?=\))", select).group(0), highlight))
             trace_benchmark = go.Scattergl(x=df[x], y=df[y], name='Industry Standard', mode='markers', marker=dict(opacity=0.1, color='Grey'))
             data = [trace_benchmark]
             for index, refinery in enumerate(refinery_id_list):
                 color = next(palette)
                 df2 = df[df.Refinery_ID.eq(refinery)][[x, y]]
-                trace_target = go.Scattergl(x=df2[x], y=df2[y], name=selects[index], mode='markers', marker=dict(size=10,
+                trace_target = go.Scattergl(x=df2[x], y=df2[y], name=highlight[index], mode='markers', marker=dict(size=10,
                                                                                                                  color=color,
                                                                                                                  line=dict(width=1,
                                                                                                                            color='DarkSlateGrey')))
@@ -488,13 +517,25 @@ def render_graph(n_clicks, x, y, z, benchmark_toggle, graph_type, legend, select
                         trend = sm.OLS(df2[y], sm.add_constant(date_series)).fit().fittedvalues
                     else:
                         trend = sm.OLS(df2[y], sm.add_constant(df2[x])).fit().fittedvalues
-                    trace_trend = go.Scattergl(x=df2[x], y=trend, name=selects[index] + ' Trace', mode='lines', marker=dict(color=color))
+                    trace_trend = go.Scattergl(x=df2[x], y=trend, name=highlight[index] + ' Trace', mode='lines', marker=dict(color=color))
                     data.append(trace_trend)
             layout = go.Layout(title='Benchmarking Plot', xaxis_title=x, yaxis_title=y)
             fig = go.Figure(data=data, layout=layout)
         else:
             if graph_type == 'Scatter':
                 fig = px.scatter(df, x=x, y=y, color=legend, trendline=trend_type)
+            elif graph_type == 'Multi-Y Scatter':
+                refinery_id = re.search(r"(?<=\()\d+(?=\))", selected).group(0)
+                df2 = df[df.Refinery_ID.eq(refinery_id)][[x, y, y2]]
+                # Create figure with secondary y-axis
+                fig = make_subplots(specs=[[{"secondary_y": True}]])
+                # Add one trace for each y-axis
+                fig.add_trace(go.Scatter(x=df2[x], y=df2[y], name=y), secondary_y=False)
+                fig.add_trace(go.Scatter(x=df2[x], y=df2[y2], name=y2), secondary_y=True)
+                # Set figure axis titles
+                fig.update_xaxes(title_text=x)
+                fig.update_yaxes(title_text=y, secondary_y=False)
+                fig.update_yaxes(title_text=y2, secondary_y=True)
         fig.update_layout(legend=dict(
             orientation="h",
             yanchor="bottom",

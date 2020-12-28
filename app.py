@@ -26,5 +26,3 @@ session_id = str(uuid.uuid4())
 # TODO: Filter by result value post query, popup with dynamic selections?
 # TODO: Larger x and y variables
 # TODO: Remove background on plot
-
-# TODO: Double Y axis scatter
