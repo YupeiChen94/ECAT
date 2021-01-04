@@ -22,5 +22,4 @@ session_id = str(uuid.uuid4())
 # TODO: Graphic Customizations
 
 # TODO: Make multiple queries and save them, option for multi-graph where parameters for each graph can be set
-# TODO: Filter by result value post query, popup with dynamic selections?
 

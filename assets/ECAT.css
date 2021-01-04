@@ -54,11 +54,22 @@ H5, H3 {
     display: flex;
     flex-direction: column;
     align-items: start;
-    min-height: calc(100vh - 5.5rem);
+    min-height: calc(90vh - 8.5rem);
 }
 
 #right-column {
     background-color: #f4f4f4;
     padding: 0rem 2rem;
-    min-height: calc(100vh - 5.5rem);
+    min-height: calc(90vh - 8.5rem);
+}
+
+#table-row {
+    padding: 2rem 2rem;
+}
+
+.dash-spreadsheet .row {
+    flex-wrap: nowrap;
+    margin-left: 0px;
+    margin-right: 0px;
+    width: 100vw
 }

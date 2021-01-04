@@ -161,7 +161,7 @@ def control_tabs():
                                     dbc.Button('Analysis', color='primary', id='option-analysis-btn', className='mr-3'),
                                     dbc.Button('Customizations', color='primary', id='option-customization-btn',
                                                className='mr-3'),
-                                    dbc.Button('Table', color='primary', id='table-btn', n_clicks=0, className='mr-3')
+                                    dbc.Button('Render Graphs', color='success', id='render-button', n_clicks=0),
                                 ]),
                                 dbc.Collapse(
                                     id='data-collapse', is_open=True, children=[
@@ -223,8 +223,6 @@ def control_tabs():
                                                 dcc.Dropdown(id='y2-col'),
                                             ]),
                                         ]),
-                                        html.Br(),
-                                        dbc.Button('Render Graphs', color='success', id='render-button', n_clicks=0),
                                     ]
                                 ),
                                 dbc.Collapse(
@@ -297,7 +295,8 @@ def custom_table():
                 selected_rows=[],
                 page_action="native",
                 page_current=0,
-                style_table={'height': '80vh'}
+                page_size=20,
+                style_table={'overflowX': 'auto'}
             )
         ]
     )
@@ -336,9 +335,18 @@ app.layout = dbc.Container(
                     children=[
                         dcc.Markdown(id='debug'),
                         custom_graph(),
-                        custom_table()
+                        # html.Br(),
+                        # custom_table()
                     ]
                 ), width=9
+            ),
+        ]),
+        dbc.Row([
+            html.Div(
+                id='table-row',
+                children=[
+                    custom_table()
+                ]
             ),
             # Column Storage
             dcc.Store(id='columns-memory', storage_type='memory'),
@@ -353,6 +361,8 @@ app.layout = dbc.Container(
         Output('query-msg', 'children'),
         Output('columns-memory', 'data'),
         Output('dl-button', 'style'),
+        Output('custom-table', 'data'),
+        Output('custom-table', 'columns'),
     ],
     [Input('query-button', 'n_clicks')],
     [
@@ -364,7 +374,6 @@ app.layout = dbc.Container(
     ]
 )
 def query(n_clicks, sample_type, sdate, edate, refinery, benchmark_toggle):
-    # TODO: Try block to validate query returns data, return error as alert
     if n_clicks < 1:
         raise PreventUpdate
     t0 = time.time()
@@ -392,6 +401,11 @@ def query(n_clicks, sample_type, sdate, edate, refinery, benchmark_toggle):
     # Read SQL
     df = pd.read_sql_query(q_string, cnxn, params=params, parse_dates=['Sample_Date'])
 
+    if len(df.index) < 1:
+        alert_msg = f"0 records found in Database."
+        alert = dbc.Alert(alert_msg, color='danger', dismissable=False, duration=2000)
+        return alert, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+
     # Post-Read Format
     df.dropna(axis='columns', how='all', inplace=True)
 
@@ -402,16 +416,18 @@ def query(n_clicks, sample_type, sdate, edate, refinery, benchmark_toggle):
     col_to_remove += ['SF_Account_ID', 'Current_Catalyst', 'Current_Supplier', 'Refinery_Name', 'Sample_Year',
                       'Create_Date', 'Update_Date']
     columns = [i for i in columns if i not in col_to_remove]
+    table_columns = [{'name': i, 'id': i} for i in df.columns]
 
     # Cache Data
-    cache.set(session_id, df)
+    # cache.set(session_id, df)
 
     t1 = time.time()
     exec_time = t1 - t0
     query_size = df.shape[0]
     alert_msg = f"Queried {query_size} records. Total time: {exec_time:.2f}s."
-    alert = dbc.Alert(alert_msg, color='success', dismissable=True, duration=2000)
-    return alert, columns, dict()
+    alert = dbc.Alert(alert_msg, color='success', dismissable=False, duration=2000)
+
+    return alert, columns, dict(), df.to_dict('records'), table_columns
 
 
 @app.callback(
@@ -503,6 +519,7 @@ def update_benchmark_text(value):
     ],
     [Input('render-button', 'n_clicks')],
     [
+        State('custom-table', 'derived_virtual_data'),
         State('x-col', 'value'),
         State('y-col', 'value'),
         State('y2-col', 'value'),
@@ -514,10 +531,11 @@ def update_benchmark_text(value):
         State('trend-type', 'value')
     ]
 )
-def render_graph(n_clicks, x, y, y2, benchmark_toggle, graph_type, legend, highlight, selected, trend_type):
+def render_graph(n_clicks, data, x, y, y2, benchmark_toggle, graph_type, legend, highlight, selected, trend_type):
     if n_clicks < 1:
         raise PreventUpdate
-    df = cache.get(session_id)
+    # df = cache.get(session_id)
+    df = pd.DataFrame(data)
     if df is None:
         alert_msg = f"There is no data to render"
         alert = dbc.Alert(alert_msg, color='danger', dismissable=False, duration=2000)
@@ -584,51 +602,19 @@ def render_graph(n_clicks, x, y, y2, benchmark_toggle, graph_type, legend, highl
 
 
 @app.callback(
-    [
-        Output('custom-table', 'data'),
-        Output('custom-table', 'columns'),
-        Output('custom-graph-div', 'style'),
-        Output('custom-table-div', 'style'),
-        Output('table-btn', 'children'),
-        Output('render-table-msg', 'children'),
-    ],
-    [
-        Input('table-btn', 'n_clicks')
-    ],
-    [
-        State('table-btn', 'children')
-    ]
-)
-def render_table(n_clicks, button_text):
-    if n_clicks < 1:
-        raise PreventUpdate
-    df = cache.get(session_id)
-    if df is None:
-        alert_msg = f"There is no data to render"
-        alert = dbc.Alert(alert_msg, color='danger', dismissable=False, duration=2000)
-        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, alert
-    else:
-        data = df.to_dict('records')
-        columns = [{'name': i, 'id': i} for i in df.columns]
-        s = dict()
-        h = dict(display='none')
-        if button_text == 'Table':
-            return data, columns, h, s, 'Graph', ''
-        else:
-            return data, columns, s, h, 'Table', ''
-
-
-@app.callback(
     Output('query-data-dl', 'data'),
-    [Input('dl-button', 'n_clicks')]
+    [Input('dl-button', 'n_clicks')],
+    [State('custom-table', 'data')]
 )
-def generate_csv(n_clicks):
+def generate_csv(n_clicks, data):
     if n_clicks < 1:
         raise PreventUpdate
-    df = cache.get(session_id)
+    # df = cache.get(session_id)
+    df = pd.DataFrame(data)
     if df is None:
         raise PreventUpdate
     else:
+        df['Sample_Date'] = pd.to_datetime(df['Sample_Date'])
         df['Sample_Date'] = df['Sample_Date'].dt.strftime('%m/%d/%Y')
         return send_data_frame(df.to_csv, filename='querydata.csv')
 
