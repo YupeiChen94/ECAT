@@ -1,4 +1,5 @@
 import dash
+import dash_table
 import dash_daq as daq
 import dash_bootstrap_components as dbc
 import dash_core_components as dcc
@@ -29,9 +30,9 @@ sql_server = 'DESKTOP-G4MFTGK' if isHome else 'CDCSQLPROD01'
 database = 'eCat'
 trusted_cnxn = 'Yes'
 cnxn = pyodbc.connect('TRUSTED_CONNECTION=' + trusted_cnxn + ';'
-                      'DRIVER={SQL Server Native Client 11.0};'
-                      'SERVER=' + sql_server + ';'
-                      'DATABASE=' + database + ';'
+                                                             'DRIVER={SQL Server Native Client 11.0};'
+                                                             'SERVER=' + sql_server + ';'
+                                                                                      'DATABASE=' + database + ';'
                       )
 
 q_units_string = """
@@ -54,6 +55,8 @@ q_sample_types = pd.read_sql(q_sample_types_string, cnxn)['Sample_Type'].values.
 
 # region Constants
 graph_types = ['Scatter', 'Multi-Y Scatter']
+
+
 # endregion
 
 
@@ -100,7 +103,8 @@ def control_tabs():
                                 dcc.Dropdown(
                                     id='sample-type-select',
                                     # ECAT_LO disabled, confidential data
-                                    options=[{'label': str(c), 'value': str(c), 'disabled': True if c == 'ECAT_LO' else False} for c in q_sample_types],
+                                    options=[{'label': str(c), 'value': str(c),
+                                              'disabled': True if c == 'ECAT_LO' else False} for c in q_sample_types],
                                     multi=False,
                                     searchable=False,
                                     value=q_sample_types[0],
@@ -136,8 +140,10 @@ def control_tabs():
                                     ),
                                 ]),
                                 html.Br(),
-                                dbc.Button('Query ECAT DB', color='primary', id='query-button', n_clicks=0, className='mr-5'),
-                                dbc.Button('Download CSV', color='info', id='dl-button', n_clicks=0, style=dict(display='none')),
+                                dbc.Button('Query ECAT DB', color='primary', id='query-button', n_clicks=0,
+                                           className='mr-5'),
+                                dbc.Button('Download CSV', color='info', id='dl-button', n_clicks=0,
+                                           style=dict(display='none')),
                                 Download(id='query-data-dl')
                             ]
                         )
@@ -153,8 +159,9 @@ def control_tabs():
                                 html.Div([
                                     dbc.Button('Data', color='primary', id='option-data-btn', className='mr-3'),
                                     dbc.Button('Analysis', color='primary', id='option-analysis-btn', className='mr-3'),
-                                    dbc.Button('Customizations', color='primary', id='option-customization-btn', className='mr-3'),
-                                    dbc.Button('Render Graphs', color='success', id='render-button', n_clicks=0)
+                                    dbc.Button('Customizations', color='primary', id='option-customization-btn',
+                                               className='mr-3'),
+                                    dbc.Button('Table', color='primary', id='table-btn', n_clicks=0, className='mr-3')
                                 ]),
                                 dbc.Collapse(
                                     id='data-collapse', is_open=True, children=[
@@ -216,6 +223,8 @@ def control_tabs():
                                                 dcc.Dropdown(id='y2-col'),
                                             ]),
                                         ]),
+                                        html.Br(),
+                                        dbc.Button('Render Graphs', color='success', id='render-button', n_clicks=0),
                                     ]
                                 ),
                                 dbc.Collapse(
@@ -269,6 +278,31 @@ def custom_graph():
             )
         ]
     )
+
+
+def custom_table():
+    """
+    :return: A Div containing the placeholder for a filterable datatable
+    """
+    return html.Div(
+        id='custom-table-div',
+        children=[
+            dash_table.DataTable(
+                id='custom-table',
+                columns=[],
+                filter_action="native",
+                sort_action="native",
+                sort_mode="multi",
+                selected_columns=[],
+                selected_rows=[],
+                page_action="native",
+                page_current=0,
+                style_table={'height': '80vh'}
+            )
+        ]
+    )
+
+
 # endregion
 
 
@@ -289,7 +323,8 @@ app.layout = dbc.Container(
                         control_tabs(),
                         html.Br(),
                         dbc.Spinner(html.Div(id='query-msg')),
-                        dbc.Spinner(html.Div(id='render-msg'))
+                        dbc.Spinner(html.Div(id='render-graph-msg')),
+                        dbc.Spinner(html.Div(id='render-table-msg')),
                     ]
                 ),
                 width=3
@@ -301,6 +336,7 @@ app.layout = dbc.Container(
                     children=[
                         dcc.Markdown(id='debug'),
                         custom_graph(),
+                        custom_table()
                     ]
                 ), width=9
             ),
@@ -312,18 +348,6 @@ app.layout = dbc.Container(
 
 
 # region Callbacks
-@app.callback(
-    Output('render-msg', 'children'),
-    [Input('render-button', 'n_clicks')]
-)
-def render_msg(n_clicks):
-    if n_clicks < 1:
-        raise PreventUpdate
-    alert_msg = f"Rendering your visualization..."
-    alert = dbc.Alert(alert_msg, color='warning', dismissable=True, duration=2000)
-    return alert
-
-
 @app.callback(
     [
         Output('query-msg', 'children'),
@@ -373,15 +397,17 @@ def query(n_clicks, sample_type, sdate, edate, refinery, benchmark_toggle):
 
     # Columns Setup
     columns = df.columns.tolist()
-    col_to_remove = ['Sample_Number', 'Arrival_Date', 'Refinery_ID', 'Sampling_Point', 'Sample_Type', 'Comment', 'ECAT_Original_ID']
-    col_to_remove += ['SF_Account_ID', 'Current_Catalyst', 'Current_Supplier', 'Refinery_Name', 'Sample_Year', 'Create_Date', 'Update_Date']
+    col_to_remove = ['Sample_Number', 'Arrival_Date', 'Refinery_ID', 'Sampling_Point', 'Sample_Type', 'Comment',
+                     'ECAT_Original_ID']
+    col_to_remove += ['SF_Account_ID', 'Current_Catalyst', 'Current_Supplier', 'Refinery_Name', 'Sample_Year',
+                      'Create_Date', 'Update_Date']
     columns = [i for i in columns if i not in col_to_remove]
 
     # Cache Data
     cache.set(session_id, df)
 
     t1 = time.time()
-    exec_time = t1-t0
+    exec_time = t1 - t0
     query_size = df.shape[0]
     alert_msg = f"Queried {query_size} records. Total time: {exec_time:.2f}s."
     alert = dbc.Alert(alert_msg, color='success', dismissable=True, duration=2000)
@@ -471,7 +497,10 @@ def update_benchmark_text(value):
 
 
 @app.callback(
-    Output('custom-graph', 'figure'),
+    [
+        Output('custom-graph', 'figure'),
+        Output('render-graph-msg', 'children'),
+    ],
     [Input('render-button', 'n_clicks')],
     [
         State('x-col', 'value'),
@@ -490,24 +519,27 @@ def render_graph(n_clicks, x, y, y2, benchmark_toggle, graph_type, legend, highl
         raise PreventUpdate
     df = cache.get(session_id)
     if df is None:
-        # TODO: Alert to user that there is no data to render
-        raise PreventUpdate
+        alert_msg = f"There is no data to render"
+        alert = dbc.Alert(alert_msg, color='danger', dismissable=False, duration=2000)
+        return dash.no_update, alert
     else:
         palette = cycle(px.colors.qualitative.Plotly)
         trend_type = 'none' if trend_type == 'off' else trend_type
+        # Benchmark Plot using ScatterGL for increased speed
         if benchmark_toggle:
-            # Benchmark Plot using ScatterGL for increased speed
             # Regex looks for any number of digits between parenthesis
             refinery_id_list = list(map(lambda select: re.search(r"(?<=\()\d+(?=\))", select).group(0), highlight))
-            trace_benchmark = go.Scattergl(x=df[x], y=df[y], name='Industry Standard', mode='markers', marker=dict(opacity=0.1, color='Grey'))
+            trace_benchmark = go.Scattergl(x=df[x], y=df[y], name='Industry Standard', mode='markers',
+                                           marker=dict(opacity=0.1, color='Grey'))
             data = [trace_benchmark]
             for index, refinery in enumerate(refinery_id_list):
                 color = next(palette)
                 df2 = df[df.Refinery_ID.eq(refinery)][[x, y]]
-                trace_target = go.Scattergl(x=df2[x], y=df2[y], name=highlight[index], mode='markers', marker=dict(size=10,
-                                                                                                                 color=color,
-                                                                                                                 line=dict(width=1,
-                                                                                                                           color='DarkSlateGrey')))
+                trace_target = go.Scattergl(x=df2[x], y=df2[y], name=highlight[index], mode='markers',
+                                            marker=dict(size=10,
+                                                        color=color,
+                                                        line=dict(width=1,
+                                                                  color='DarkSlateGrey')))
                 data.append(trace_target)
                 # regression
                 if trend_type != 'none':
@@ -517,7 +549,8 @@ def render_graph(n_clicks, x, y, y2, benchmark_toggle, graph_type, legend, highl
                         trend = sm.OLS(df2[y], sm.add_constant(date_series)).fit().fittedvalues
                     else:
                         trend = sm.OLS(df2[y], sm.add_constant(df2[x])).fit().fittedvalues
-                    trace_trend = go.Scattergl(x=df2[x], y=trend, name=highlight[index] + ' Trace', mode='lines', marker=dict(color=color))
+                    trace_trend = go.Scattergl(x=df2[x], y=trend, name=highlight[index] + ' Trace', mode='lines',
+                                               marker=dict(color=color))
                     data.append(trace_trend)
             layout = go.Layout(title='Benchmarking Plot', xaxis_title=x, yaxis_title=y)
             fig = go.Figure(data=data, layout=layout)
@@ -536,14 +569,53 @@ def render_graph(n_clicks, x, y, y2, benchmark_toggle, graph_type, legend, highl
                 fig.update_xaxes(title_text=x)
                 fig.update_yaxes(title_text=y, secondary_y=False)
                 fig.update_yaxes(title_text=y2, secondary_y=True)
-        fig.update_layout(legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1
-        ))
-        return fig
+        fig.update_layout(
+            template='none',
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ))
+        alert_msg = f"Rendering your visualization..."
+        alert = dbc.Alert(alert_msg, color='warning', dismissable=True, duration=2000)
+        return fig, alert,
+
+
+@app.callback(
+    [
+        Output('custom-table', 'data'),
+        Output('custom-table', 'columns'),
+        Output('custom-graph-div', 'style'),
+        Output('custom-table-div', 'style'),
+        Output('table-btn', 'children'),
+        Output('render-table-msg', 'children'),
+    ],
+    [
+        Input('table-btn', 'n_clicks')
+    ],
+    [
+        State('table-btn', 'children')
+    ]
+)
+def render_table(n_clicks, button_text):
+    if n_clicks < 1:
+        raise PreventUpdate
+    df = cache.get(session_id)
+    if df is None:
+        alert_msg = f"There is no data to render"
+        alert = dbc.Alert(alert_msg, color='danger', dismissable=False, duration=2000)
+        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, alert
+    else:
+        data = df.to_dict('records')
+        columns = [{'name': i, 'id': i} for i in df.columns]
+        s = dict()
+        h = dict(display='none')
+        if button_text == 'Table':
+            return data, columns, h, s, 'Graph', ''
+        else:
+            return data, columns, s, h, 'Table', ''
 
 
 @app.callback(
@@ -591,6 +663,8 @@ def toggle_collapse(d_click, a_click, c_click, d_state, a_state, c_state):
     elif btn_id == 'option-customization-btn' and c_click:
         return False, False, not c_state
     return False, False, False
+
+
 # endregion
 
 
